@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+langchain
+langchain-core
+langchain-openai
+openai
+python-dotenv
+supabase
+requests
