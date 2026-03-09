@@ -71,7 +71,7 @@ async def whatsapp_reply(
     # MODULO CLIENTES (RAG Y CRM)
     # ==============================================================================
     cliente_db = database.obtener_cliente(From)
-    historial = (cliente_db.get("observaciones_generales") or "")[-600:] if cliente_db else ""
+    historial = (cliente_db.get("observaciones_generales") or "")[-4000:] if cliente_db else ""
 
     datos_msg = {}
     try:
@@ -121,7 +121,7 @@ async def whatsapp_reply(
             faltante = "NOMBRE_SOLO_SI_HAY_CITA"
 
         # 2. BÚSQUEDA LIBERADA: Buscamos siempre que tengamos zona, presupuesto o intención, sin importar el nombre
-        if faltante in ["Ninguno", "NOMBRE_SOLO_SI_HAY_CITA"] or quiere_ver or datos_finales["zona_municipio"]:
+        if faltante in ["Ninguno", "NOMBRE_SOLO_SI_HAY_CITA"] or quiere_ver or datos_finales["zona_municipio"] or datos_finales["tipo_inmueble"]:
             propiedades = database.buscar_propiedades(
                 datos_finales["tipo_inmueble"], 
                 datos_finales["tipo_operacion"],
@@ -225,18 +225,22 @@ async def whatsapp_reply(
         # --- 🎲 INICIA LA RULETA DE ASESORES ---
         asesor_asignado = database.obtener_asesor_aleatorio()
         
-        # Extraemos AMBOS datos (con paracaídas por si alguno está vacío en Supabase)
+        # 1. Sacamos el nombre y el WhatsApp del ganador
         if asesor_asignado:
             telefono_asesor = asesor_asignado.get("telefono") or "whatsapp:+5214272786799"
-            correo_destino = asesor_asignado.get("correo") or "alfredoferrusca885@gmail.com"
             nombre_asesor = asesor_asignado.get("nombre") or "Administrador"
         else:
             telefono_asesor = "whatsapp:+5214272786799"
-            correo_destino = "alfredoferrusca885@gmail.com"
             nombre_asesor = "Administrador"
             
-        # 🚀 DISPARAMOS AMBAS NOTIFICACIONES AL MISMO TIEMPO
+        # 🚨 2. EL CORREO MAESTRO: Aquí pones el correo único donde quieren que llegue todo
+        correo_destino = "richardRI1690@gmail.com" # <--- CÁMBIALO POR EL CORREO REAL
+            
+        # 🚀 DISPARAMOS AMBAS NOTIFICACIONES
+        # El correo se va al buzón maestro, pero lleva impreso el nombre del ganador
         mailer.enviar_notificacion_asesor(info_lead, resumen_ejecutivo, correo_destino, nombre_asesor)
+        
+        # El WhatsApp sí se va directo al celular del ganador
         whatsapp_notifier.enviar_alerta_asesor(telefono_asesor, info_lead, resumen_ejecutivo)
         
         # 5. ACTUALIZAMOS EL CANDADO EN LA BASE DE DATOS

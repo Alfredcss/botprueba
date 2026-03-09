@@ -5,8 +5,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-
-
 def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino="alfredoferrusca885@gmail.com", nombre_asesor="Equipo Century 21"):
     # CONFIGURACIÓN
     GMAIL_USER = os.getenv("GMAIL_USER")
@@ -17,7 +15,8 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino
         msg = MIMEMultipart()
         msg['From'] = GMAIL_USER
         msg['To'] = EMAIL_DESTINO
-        msg['Subject'] = f"🔴 NUEVO LEAD CALIFICADO: {datos_cliente.get('nombre', 'Cliente')} 🏠"
+        # 🚨 CAMBIO 1: Agregamos el nombre del asesor al ASUNTO del correo
+        msg['Subject'] = f"🔴 NUEVO LEAD para {nombre_asesor}: {datos_cliente.get('nombre', 'Cliente')} 🏠"
 
         # Limpiamos el número para el link de WhatsApp (quitamos 'whatsapp:' y el '+')
         telefono_raw = datos_cliente.get('telefono', '')
@@ -42,7 +41,11 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino
                 
                 <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
                   <tr>
-                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #666;"><strong>👤 Nombre:</strong></td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #666;"><strong>👔 Asesor Asignado:</strong></td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #BE9A5A; font-weight: bold; text-align: right; font-size: 16px;">{nombre_asesor}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #666;"><strong>👤 Nombre del cliente:</strong></td>
                     <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #222; font-weight: bold; text-align: right;">{datos_cliente.get('nombre')}</td>
                   </tr>
                   <tr>

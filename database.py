@@ -126,7 +126,7 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
 
         # 2. MANEJO INTELIGENTE DEL PRESUPUESTO Y EL ORDEN
         if not presupuesto:
-            presupuesto_busqueda = 50000000
+            presupuesto_busqueda = 1000000000
             orden_descendente = False  # Si no hay presupuesto, mostramos de la más barata a la más cara
         else:
             presupuesto_busqueda = presupuesto * 1.2 # Margen del 20%

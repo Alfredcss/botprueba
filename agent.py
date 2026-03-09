@@ -6,9 +6,7 @@ import config
 llm_analista = ChatOpenAI(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, temperature=0)
 llm_vendedor = ChatOpenAI(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, temperature=0.4)
 
-# ==============================================================================
-# 1. PROMPT ANALISTA (EXTRACCIÓN SILENCIOSA Y MATEMÁTICA)
-# ==============================================================================
+
 # ==============================================================================
 # 1. PROMPT ANALISTA (EXTRACCIÓN SILENCIOSA Y MATEMÁTICA)
 # ==============================================================================
@@ -22,7 +20,15 @@ prompt_analista = ChatPromptTemplate.from_messages([
        - POR CONTEXTUALIZACIÓN: Si menciona características (ej. "la de Granjas Banthi", "la de 15 mil"), rastrea esa propiedad exacta.
        - EL TRUCO DEL ENLACE (VITAL): Si el historial no dice la palabra "Referencia", busca el enlace web de la ficha técnica de esa propiedad (ej. century21mexico.com/p/610127). El ID es EXACTAMENTE el número de 6 dígitos al final del enlace (610127).
        - ID DIRECTO: Si da un ID exacto (ej. "610127"), extráelo.
-    2. TIPO DE INMUEBLE (ESTRICTO): Identifica en singular (ej. "Casa", "Departamento", "Terreno"). Si menciona varios, elige el principal. Si es genérico: DEVUELVE null.
+    2. TIPO DE INMUEBLE (CATÁLOGO ESTRICTO): Identifica el tipo de propiedad que busca el cliente y devuélvelo EXACTAMENTE como una de estas 8 opciones: "Casa", "Departamento", "Terreno", "Local", "Consultorio", "Bodega", "Nave", "Inmueble-productivo".
+       - MAPEO DE SINÓNIMOS:
+         - Si dice "depa" o "piso", extrae "Departamento".
+         - Si dice "lote", "parcela" o "predio", extrae "Terreno".
+         - Si dice "oficina", "despacho" o "clínica", extrae "Consultorio".
+         - Si dice "comercio" o "negocio", extrae "Local".
+         - Si dice "nave industrial" o "galerón", extrae "Nave".
+         - Si dice "rancho", "finca" o "hacienda", extrae "Inmueble-productivo".
+       - Si menciona varios, elige el principal. Si la búsqueda es muy genérica (ej. "busco algo", "qué propiedades tienes") o no encaja en las 8 opciones, devuelve null.
     3. TIPO DE OPERACIÓN (ESTRICTO): Identifica "Venta" o "Renta".
     4. ZONA: Estandariza ortografía (ej. "san juan del rio" -> "San Juan del Río").
     # Reemplaza el punto 5 del prompt_analista por este:
@@ -93,7 +99,8 @@ prompt_vendedor = ChatPromptTemplate.from_messages([
     6. 📸 MANEJO DE FOTOS Y DETALLES (MEMORIA): Si el cliente pide fotos o más detalles de una opción que TÚ le acabas de enviar en el mensaje anterior (ej. "me interesa la segunda"), NO digas que no está disponible. Revisa el HISTORIAL DE CHAT para recordar los detalles de esa propiedad y dile con entusiasmo que puede ver la galería completa y toda la información entrando al link de '📸 Fotos y Ficha Técnica' que ya le compartiste previamente. Nunca ofrezcas una propiedad distinta si el cliente ya eligió una de tu lista.
     7. 🤝 CAPTACIÓN DE PROPIEDADES (DUEÑOS): Si el cliente indica que quiere VENDER o RENTAR SU PROPIA PROPIEDAD, ignora el inventario. Felicítalo por dar el paso, menciónale brevemente que en Century 21 Diamante somos expertos en comercializar propiedades de forma rápida y segura, y dile que un asesor experto se comunicará con él para ayudarle con la promoción. Si no tienes su nombre, pídeselo de forma amable para registrar su solicitud.
     8. 🏷️ ETIQUETA DE REFERENCIA INQUEBRANTABLE: Al presentar el inventario, NUNCA omitas el ID de la propiedad. SIEMPRE debes incluir explícitamente "🆔 Referencia: [número]" en los detalles de cada casa para que el cliente pueda identificarla fácilmente.
-     
+    9. 🛑 RESPETA EL TIPO DE PROPIEDAD: Si la etiqueta de la propiedad dice "Nave", trátala como Nave, aunque su descripción mencione "terreno comercial" u otras características. No corrijas al cliente si este usa el término correcto de la etiqueta.
+
     HISTORIAL DE CHAT:
     {historial_chat}
     """),
