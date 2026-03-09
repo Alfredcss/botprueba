@@ -1,13 +1,17 @@
+import os
 import smtplib
+import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import re
+from datetime import datetime
 
-def enviar_notificacion_asesor(datos_cliente, historial_completo):
+
+
+def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino="alfredoferrusca885@gmail.com", nombre_asesor="Equipo Century 21"):
     # CONFIGURACIÓN
-    GMAIL_USER = "alfredofe.ti22@utsjr.edu.mx" 
-    GMAIL_PASS = "mtqa uayz xlcv dqwb" # TUS 16 DÍGITOS DE GOOGLE
-    EMAIL_DESTINO = "alfredoferrusca885@gmail.com" # Tu correo de asesor
+    GMAIL_USER = os.getenv("GMAIL_USER")
+    GMAIL_PASS = os.getenv("GMAIL_PASS")
+    EMAIL_DESTINO = correo_destino
 
     try:
         msg = MIMEMultipart()
@@ -78,8 +82,7 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo):
           </body>
         </html>
         """
-        
-        # OJO AQUÍ: Cambiamos 'plain' por 'html'
+      
         msg.attach(MIMEText(cuerpo_html, 'html'))
 
         server = smtplib.SMTP('smtp.gmail.com', 587)

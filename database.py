@@ -1,19 +1,19 @@
 from supabase import create_client, Client
 import config
 import utils
+from datetime import datetime
+import random
+import whatsapp_notifier
 
-# Inicializar cliente de Supabase
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-
-# 🛡️ SEGURIDAD: LISTA BLANCA DE COLUMNAS
-COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T,m2C,recamaras,banios,mapa_url,latitud,longitud"
+COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T,m2C,recamaras,banios,mapa_url,latitud,longitud,url_ficha"
 
 # ==============================================================================
 # FUNCIONES VIP (ASESORES)
 # ==============================================================================
 def obtener_asesor_por_telefono(telefono: str):
     try:
-        res = supabase.table("asesores").select("nombre").eq("telefono", telefono).execute()
+        res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
         if res.data: return res.data[0]["nombre"]
         return None
     except Exception as e:
@@ -68,9 +68,24 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         nuevo_historial = f"{observaciones_actuales}\nCliente: {mensaje_usuario}\nBot: {respuesta_bot}"
         
-        datos_guardar = {"telefono": telefono, "observaciones_generales": nuevo_historial}
+        # 1. Obtenemos el momento actual
+        ahora = datetime.now()
+        
+        # 2. Formateamos exactamente como lo piden tus columnas en Supabase
+        fecha_str = ahora.strftime("%Y-%m-%d") # Formato para columna 'date' (Ej: 2026-03-03)
+        hora_str = ahora.strftime("%H:%M:%S")  # Formato para columna 'time' (Ej: 14:30:00)
+        
+        # 3. Lo inyectamos en los datos a guardar
+        datos_guardar = {
+            "telefono": telefono, 
+            "observaciones_generales": nuevo_historial,
+            "fecha_contacto": fecha_str,
+            "hora_contacto": hora_str
+        }
 
+        # Continúa tu código normal...
         if datos_extraidos.get("nombre_cliente"): datos_guardar["nombre_cliente"] = datos_extraidos["nombre_cliente"]
+        
         if datos_extraidos.get("tipo_inmueble"): datos_guardar["tipo_inmueble"] = datos_extraidos["tipo_inmueble"]
         if datos_extraidos.get("zona_municipio"): datos_guardar["zona_municipio"] = datos_extraidos["zona_municipio"]
         if datos_extraidos.get("presupuesto"): datos_guardar["presupuesto"] = str(datos_extraidos["presupuesto"])
@@ -96,34 +111,60 @@ def buscar_por_clave(clave):
         print(f"[ERROR BUSQUEDA CLAVE] {e}")
         return []
 
-def buscar_propiedades(tipo_inmueble, zona, presupuesto, mostrar_mix_general=False):
+def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False):
+    """Búsqueda estricta y lógica: Respeta siempre el tipo de inmueble y la operación."""
     try:
+        # 🚨 1. EL FILTRO ANTI-MEZCLAS (NUEVO)
+        # Si la IA no supo si es Venta o Renta, usamos el sentido común financiero
+        if not tipo_operacion:
+            if presupuesto and presupuesto > 150000:
+                tipo_operacion = "Venta"  # Nadie paga 150 mil de renta mensual
+            elif presupuesto and presupuesto <= 150000:
+                tipo_operacion = "Renta"  # Nadie compra una casa en 150 mil
+            else:
+                tipo_operacion = "Venta"  # Por defecto, asumimos Venta si no hay datos
+
+        # 2. MANEJO INTELIGENTE DEL PRESUPUESTO Y EL ORDEN
+        if not presupuesto:
+            presupuesto_busqueda = 50000000
+            orden_descendente = False  # Si no hay presupuesto, mostramos de la más barata a la más cara
+        else:
+            presupuesto_busqueda = presupuesto * 1.2 # Margen del 20%
+            orden_descendente = True   # Si dio presupuesto, mostramos lo más top que le alcanza
+
+        # FASE 1: BÚSQUEDA IDEAL (Todo estricto)
         query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
-
-        if tipo_inmueble: query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble}%")
-
+        
+        # 🚨 CANDADOS INQUEBRANTABLES: Nunca soltamos la Operación ni el Tipo
+        if tipo_operacion: query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
+        if tipo_inmueble: query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
+        
         if zona and zona.lower() != "sugerencias":
             zona_busqueda = f"municipio.ilike.*{zona}*,colonia.ilike.*{zona}*,nombre.ilike.*{zona}*"
             query = query.or_(zona_busqueda)
 
-        # 🧠 PRESUPUESTO: Funciona como TOPE y ordena de mayor a menor
-        if presupuesto:
-            max_p = presupuesto * 1.2
-            query = query.lte("precio", max_p).order("precio", desc=True)
-
+        query = query.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
         res = query.execute()
         propiedades = res.data
 
-        # 🚨 RED DE SEGURIDAD
+        # FASE 2: BÚSQUEDA FLEXIBLE (Mismos candados, pero le perdonamos la Zona)
         if not propiedades:
-            print(f"[DB] Búsqueda específica vacía. Activando Red de Seguridad.")
-            query_mix = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS).limit(4)
-            if presupuesto:
-                query_mix = query_mix.lte("precio", presupuesto * 1.2).order("precio", desc=True)
-            res_mix = query_mix.execute()
-            propiedades = res_mix.data
+            print("[DB] Búsqueda 1 vacía. Intentando Fase 2 (Sin Zona)...")
+            query_f2 = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
+            
+            # Mantenemos los candados inquebrantables
+            if tipo_operacion: query_f2 = query_f2.ilike("tipoOperacion", f"%{tipo_operacion}%")
+            if tipo_inmueble: query_f2 = query_f2.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
+            
+            query_f2 = query_f2.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
+            res_f2 = query_f2.execute()
+            propiedades = res_f2.data
+
+        # ELIMINAMOS LA FASE 3 (Modo Supervivencia). 
+        # Si después de quitar la zona sigue sin haber casas de ese precio, 
+        # es mejor devolver vacío para que el bot diga la verdad.
         
-        return propiedades[:4]
+        return propiedades[:4] if propiedades else []
     except Exception as e:
         print(f"[ERROR DB BUSQUEDA] {e}")
         return []
@@ -133,3 +174,21 @@ def guardar_mapa_generado(id_propiedad, url_mapa):
         supabase.table("propiedades").update({"mapa_url": url_mapa}).eq("id", id_propiedad).execute()
     except Exception as e:
         print(f"[ERROR GUARDANDO MAPA] {e}")
+
+def obtener_asesor_aleatorio():
+    try:
+        # 🚨 CORRECCIÓN: Agregamos 'telefono' al select para que Twilio pueda usarlo
+        res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
+        asesores_activos = res.data
+
+        if not asesores_activos:
+            print("[ALERTA] No hay ningún asesor con activo=TRUE en Supabase.")
+            return None
+        
+        asesor_ganador = random.choice(asesores_activos)
+        print(f"[ASIGNACIÓM] La ruleta eligio a: {asesor_ganador['nombre']} ({asesor_ganador['correo']})")
+
+        return asesor_ganador
+    except Exception as e:
+        print(f"[ERROR DB OBTENER ASESOR] {e}")
+    return None
