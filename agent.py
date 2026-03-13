@@ -101,7 +101,7 @@ prompt_vendedor = ChatPromptTemplate.from_messages([
 # ==============================================================================
 prompt_resumen = ChatPromptTemplate.from_messages([
     ("system", """
-    Eres un asistente ejecutivo de Century 21 Diamante. Tu objetivo es leer el historial de chat y crear un resumen DIRECTO y MUY BREVE para el asesor humano.
+    Eres un asistente ejecutivo de Century 21 Diamante. Tu objetivo es leer el historial de chat y crear un resumen DIRECTO y MUY BREVE para el asesor.
     
     DATOS DEL CLIENTE:
     Nombre: {nombre}
