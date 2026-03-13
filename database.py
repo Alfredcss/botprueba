@@ -24,19 +24,16 @@ def obtener_propiedades_por_asesor(nombre_asesor: str):
     try:
         print(f"\n[DB REPORTES] 1. Buscando ID para el asesor: '{nombre_asesor}'")
         
-        # PASO 1: Buscar al asesor en su tabla
         asesor_res = supabase.table("asesores").select("id, nombre").ilike("nombre", f"%{nombre_asesor}%").execute()
         
         if not asesor_res.data:
             print(f"[DB REPORTES] ❌ ERROR: No existe ningún asesor llamado '{nombre_asesor}' en la tabla 'asesores'.")
             return []
             
-        # Extraemos el ID
         id_del_asesor = asesor_res.data[0]["id"]
         nombre_real = asesor_res.data[0]["nombre"]
         print(f"[DB REPORTES] ✅ Asesor encontrado: {nombre_real} (ID: {id_del_asesor})")
         
-        # PASO 2: Buscar las propiedades usando ese ID
         print(f"[DB REPORTES] 2. Buscando casas donde asesor_id == {id_del_asesor}")
         res = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS).eq("asesor_id", id_del_asesor).execute()
         
@@ -68,14 +65,10 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         nuevo_historial = f"{observaciones_actuales}\nCliente: {mensaje_usuario}\nBot: {respuesta_bot}"
         
-        # 1. Obtenemos el momento actual
         ahora = datetime.now()
+        fecha_str = ahora.strftime("%Y-%m-%d") 
+        hora_str = ahora.strftime("%H:%M:%S")  
         
-        # 2. Formateamos exactamente como lo piden tus columnas en Supabase
-        fecha_str = ahora.strftime("%Y-%m-%d") # Formato para columna 'date' (Ej: 2026-03-03)
-        hora_str = ahora.strftime("%H:%M:%S")  # Formato para columna 'time' (Ej: 14:30:00)
-        
-        # 3. Lo inyectamos en los datos a guardar
         datos_guardar = {
             "telefono": telefono, 
             "observaciones_generales": nuevo_historial,
@@ -83,9 +76,7 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
             "hora_contacto": hora_str
         }
 
-        # Continúa tu código normal...
         if datos_extraidos.get("nombre_cliente"): datos_guardar["nombre_cliente"] = datos_extraidos["nombre_cliente"]
-        
         if datos_extraidos.get("tipo_inmueble"): datos_guardar["tipo_inmueble"] = datos_extraidos["tipo_inmueble"]
         if datos_extraidos.get("zona_municipio"): datos_guardar["zona_municipio"] = datos_extraidos["zona_municipio"]
         if datos_extraidos.get("presupuesto"): datos_guardar["presupuesto"] = str(datos_extraidos["presupuesto"])
@@ -111,26 +102,31 @@ def buscar_por_clave(clave):
         print(f"[ERROR BUSQUEDA CLAVE] {e}")
         return []
 
-def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None):
-    """Búsqueda literal: Obedece exactamente el tipo de operación sin hacer suposiciones por precio."""
+def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None, orden_precio=None):
+    """Búsqueda literal: Obedece el tipo de operación sin suposiciones y permite ordenar por precio (la más cara/barata)."""
     try:
-        # 🗑️ ELIMINAMOS la regla de los 150,000. 
-        # Si tipo_operacion viene vacío, no asumimos nada.
-
-        # 1. MANEJO INTELIGENTE DEL PRESUPUESTO Y EL ORDEN
+        # 1. MANEJO DEL PRESUPUESTO
         if not presupuesto:
             presupuesto_busqueda = 1000000000
-            orden_descendente = False  
         else:
             presupuesto_busqueda = presupuesto * 1.2 # Margen del 20%
-            orden_descendente = True   
+
+        # 🚨 2. MANEJO INTELIGENTE DE ORDEN
+        # Esto manda sobre cualquier otra lógica si el cliente pidió algo explícito.
+        if orden_precio == "desc":
+            orden_descendente = True   # De la más cara a la más barata
+        elif orden_precio == "asc":
+            orden_descendente = False  # De la más barata a la más cara
+        else:
+            # Comportamiento por defecto original (depende de si dio presupuesto)
+            orden_descendente = True if presupuesto else False
 
         # =========================================================
         # CONSTRUCCIÓN DE LA QUERY BASE
         # =========================================================
         query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
         
-        # 🚨 CANDADO ESTRICTO DE OPERACIÓN: Solo filtra si la IA detectó "Venta" o "Renta"
+        # 🚨 CANDADO ESTRICTO DE OPERACIÓN
         if tipo_operacion: 
             query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
             
@@ -152,6 +148,7 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             zona_busqueda = f"municipio.ilike.*{zona}*,colonia.ilike.*{zona}*,nombre.ilike.*{zona}*"
             query = query.or_(zona_busqueda)
 
+        # Aplicamos el filtro final de precio y el orden que decidimos arriba
         query = query.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
         res = query.execute()
         propiedades = res.data
@@ -186,7 +183,6 @@ def guardar_mapa_generado(id_propiedad, url_mapa):
 
 def obtener_asesor_aleatorio():
     try:
-        # 🚨 CORRECCIÓN: Agregamos 'telefono' al select para que Twilio pueda usarlo
         res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
         asesores_activos = res.data
 
@@ -195,7 +191,7 @@ def obtener_asesor_aleatorio():
             return None
         
         asesor_ganador = random.choice(asesores_activos)
-        print(f"[ASIGNACIÓM] La ruleta eligio a: {asesor_ganador['nombre']} ({asesor_ganador['correo']})")
+        print(f"[ASIGNACIÓN] La ruleta eligió a: {asesor_ganador['nombre']} ({asesor_ganador['correo']})")
 
         return asesor_ganador
     except Exception as e:

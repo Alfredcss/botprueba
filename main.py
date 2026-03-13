@@ -137,7 +137,8 @@ async def whatsapp_reply(
         "tipo_operacion": fusionar("tipo_operacion"),
         "presupuesto": fusionar("presupuesto", es_numero=True),
         "clave_propiedad": datos_msg.get("clave_propiedad"),
-        "origen_campana": datos_msg.get("origen_campana")
+        "origen_campana": datos_msg.get("origen_campana"),
+        "orden_precio": datos_msg.get("orden_precio")
     }
 
     if datos_finales["origen_campana"]: datos_msg["origen"] = datos_finales["origen_campana"]
@@ -169,7 +170,8 @@ async def whatsapp_reply(
                 datos_finales["zona_municipio"],
                 datos_finales["presupuesto"], 
                 mostrar_mix_general=(quiere_ver and not datos_finales["zona_municipio"]),
-                tipo_credito=tipo_credito_detectado
+                tipo_credito=tipo_credito_detectado,
+                orden_precio=datos_finales["orden_precio"]
             )
 
     # Detectamos si es una búsqueda de una casa en específico

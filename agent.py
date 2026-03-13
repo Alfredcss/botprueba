@@ -9,17 +9,20 @@ llm_vendedor = ChatOpenAI(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, te
 # ==============================================================================
 # 1. PROMPT ANALISTA (EXTRACCIÓN SILENCIOSA Y MATEMÁTICA)
 # ==============================================================================
+# Reemplaza la sección del prompt_analista con esto:
+
 prompt_analista = ChatPromptTemplate.from_messages([
     ("system", """
     Eres un analista de datos inmobiliarios experto.
     
     REGLAS DE EXTRACCIÓN:
-    1. CLAVE DE PROPIEDAD: Si el cliente muestra interés en una propiedad que ya se mencionó, DEBES revisar el HISTORIAL RECIENTE para extraer EXACTAMENTE su Referencia (ID numérico). Usa lógica posicional ("la segunda", "la número 2") o busca en los links.
-    2. TIPO DE INMUEBLE: Identifica "Casa", "Departamento", "Terreno", "Local", "Consultorio", "Bodega", "Nave", "Inmueble-productivo".
-    3. TIPO DE OPERACIÓN: Identifica "Venta" o "Renta". Si no lo menciona claramente, devuelve null.
-    4. ZONA Y COLONIAS (NUEVA REGLA): Extrae el nombre del municipio, ciudad o COLONIA que mencione el cliente (ej. "Bosques", "Campestre", "Club de Golf", "San Juan del Río", "Banthi"). Corrige la ortografía si es evidente (ej. "banti" -> "Banthi").
-    5. PRESUPUESTO: Extrae solo el número entero final. Si menciona cantidades separadas, SÚMALAS.
-    6. INTERÉS HUMANO: Devuelve true ÚNICA Y EXCLUSIVAMENTE si el cliente dice explícitamente "quiero agendar visita", "quiero hablar con un humano" o "quiero vender mi casa".
+    1. CLAVE DE PROPIEDAD: ... (Lo que ya tenías)
+    2. TIPO DE INMUEBLE: ... (Lo que ya tenías)
+    3. TIPO DE OPERACIÓN: ... (Lo que ya tenías)
+    4. ZONA Y COLONIAS: ... (Lo que ya tenías)
+    5. PRESUPUESTO: ... (Lo que ya tenías)
+    6. INTERÉS HUMANO: ... (Lo que ya tenías)
+    7. ORDEN DE PRECIO (NUEVO): Si el cliente pide explícitamente la "más cara", "lujosa" o "mayor precio", devuelve "desc". Si pide la "más barata", "económica" o "menor precio", devuelve "asc". Si no menciona nada de esto, devuelve null.
     
     SALIDA JSON OBLIGATORIA:
     {{
@@ -29,14 +32,14 @@ prompt_analista = ChatPromptTemplate.from_messages([
         "zona_municipio": string | null,
         "presupuesto": int | null,
         "clave_propiedad": string | null,
-        "quiere_asesor": boolean
+        "quiere_asesor": boolean,
+        "orden_precio": string | null
     }}
     HISTORIAL RECIENTE:
     {historial_chat}
     """),
     ("human", "{mensaje}")
 ])
-
 # ==============================================================================
 # 2. PROMPT VENDEDOR (CÁLIDO, DIRECTO Y CON MEMORIA)
 # ==============================================================================
