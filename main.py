@@ -183,6 +183,9 @@ async def whatsapp_reply(
             desc_texto = p.get('descripcion', 'Sin descripción adicional.')
             desc_lower = desc_texto.lower()
             
+            # 🧹 LIMPIEZA DEL GUION: Quitamos el guion final a la referencia
+            clave_limpia = str(p.get('clave', 'S/N')).strip('-')
+            
             # Etiqueta visual de créditos para el bot
             acepta = {
                 "Infonavit": "infonavit" in desc_lower,
@@ -199,9 +202,10 @@ async def whatsapp_reply(
                 habs = p.get('recamaras') or p.get('ambientes') or 0
                 banos = p.get('banios') or 0
                 
+                # 📱 FORMATO LIMPIO WHATSAPP (Asteriscos para negritas)
                 inventario += f"""
                 ---
-                🆔 Referencia: {p.get('clave', 'S/N')}
+                *🆔 Referencia: {clave_limpia}*
                 🏠 {p.get('subtipoPropiedad')} en {p.get('tipoOperacion')} - {p.get('municipio')} ({p.get('colonia', '')})
                 💰 Precio: ${pre:,.0f}
                 📏 Terreno: {m2t}m2 | Construcción: {m2c}m2
@@ -216,7 +220,7 @@ async def whatsapp_reply(
                 # VERSIÓN CORTA (Para la lista de opciones inicial)
                 inventario += f"""
                 ---
-                🆔 Referencia: {p.get('clave', 'S/N')}
+                *🆔 Referencia: {clave_limpia}*
                 🏠 {p.get('subtipoPropiedad', 'Propiedad')} en {p.get('tipoOperacion', 'Venta')} - {p.get('municipio', 'Zona C21')}
                 💰 Precio: ${pre:,.0f}
                 💳 Créditos: {status_credito}
