@@ -172,30 +172,56 @@ async def whatsapp_reply(
                 tipo_credito=tipo_credito_detectado
             )
 
+    # Detectamos si es una búsqueda de una casa en específico
+    es_busqueda_especifica = bool(datos_finales.get("clave_propiedad"))
+
     if propiedades:
         for p in propiedades:
             pre = p.get('precio', 0)
-            desc = p.get('descripcion', '').lower()
+            desc_texto = p.get('descripcion', 'Sin descripción adicional.')
+            desc_lower = desc_texto.lower()
             
             # Etiqueta visual de créditos para el bot
             acepta = {
-                "Infonavit": "infonavit" in desc,
-                "Fovissste": "fovissste" in desc,
-                "Bancario": "bancario" in desc or "crédito" in desc or "credito" in desc
+                "Infonavit": "infonavit" in desc_lower,
+                "Fovissste": "fovissste" in desc_lower,
+                "Bancario": "bancario" in desc_lower or "crédito" in desc_lower or "credito" in desc_lower
             }
             creditos_aceptados = [nombre for nombre, lo_acepta in acepta.items() if lo_acepta]
             status_credito = f"✅ Acepta: {', '.join(creditos_aceptados)}" if creditos_aceptados else "❌ Contado/A consultar"
 
-            inventario += f"""
-            ---
-            🆔 Referencia: {p.get('clave', 'S/N')}
-            🏠 {p.get('subtipoPropiedad', 'Propiedad')} en {p.get('tipoOperacion', 'Venta')} - {p.get('municipio', 'Zona C21')}
-            💰 Precio: ${pre:,.0f}
-            💳 Créditos: {status_credito}
-            📍 Ubicación: {p.get('mapa_url') or 'Consultar asesor'}
-            📸 Ficha: {p.get('url_ficha') or 'Consultar asesor'}
-            ---
-            """
+            if es_busqueda_especifica:
+                # VERSIÓN DETALLADA (Cuando piden "la segunda", "más info", etc.)
+                m2t = p.get('m2T') or 0
+                m2c = p.get('m2C') or 0
+                habs = p.get('recamaras') or p.get('ambientes') or 0
+                banos = p.get('banios') or 0
+                
+                inventario += f"""
+                ---
+                🆔 Referencia: {p.get('clave', 'S/N')}
+                🏠 {p.get('subtipoPropiedad')} en {p.get('tipoOperacion')} - {p.get('municipio')} ({p.get('colonia', '')})
+                💰 Precio: ${pre:,.0f}
+                📏 Terreno: {m2t}m2 | Construcción: {m2c}m2
+                🛏️ Habitaciones: {habs} | 🛁 Baños: {banos}
+                💳 Créditos: {status_credito}
+                📍 Ubicación: {p.get('mapa_url')}
+                📸 Ficha y Fotos: {p.get('url_ficha')}
+                📝 Descripción extra: {desc_texto}
+                ---
+                """
+            else:
+                # VERSIÓN CORTA (Para la lista de opciones inicial)
+                inventario += f"""
+                ---
+                🆔 Referencia: {p.get('clave', 'S/N')}
+                🏠 {p.get('subtipoPropiedad', 'Propiedad')} en {p.get('tipoOperacion', 'Venta')} - {p.get('municipio', 'Zona C21')}
+                💰 Precio: ${pre:,.0f}
+                💳 Créditos: {status_credito}
+                📍 Ubicación: {p.get('mapa_url') or 'Consultar asesor'}
+                📸 Ficha: {p.get('url_ficha') or 'Consultar asesor'}
+                ---
+                """
     elif quiere_ver and not datos_finales["clave_propiedad"]:
         inventario = "No encontré coincidencias exactas."
 
