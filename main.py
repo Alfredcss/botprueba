@@ -218,10 +218,13 @@ async def whatsapp_reply(
                 """
             else:
                 # VERSIÓN CORTA (Para la lista de opciones inicial)
+                col_texto = p.get('colonia', '')
+                colonia_display = f" ({col_texto})" if col_texto else ""
+                
                 inventario += f"""
                 ---
                 *🆔 Referencia: {clave_limpia}*
-                🏠 {p.get('subtipoPropiedad', 'Propiedad')} en {p.get('tipoOperacion', 'Venta')} - {p.get('municipio', 'Zona C21')}
+                🏠 {p.get('subtipoPropiedad', 'Propiedad')} en {p.get('tipoOperacion', 'Venta')} - {p.get('municipio', 'Zona C21')}{colonia_display}
                 💰 Precio: ${pre:,.0f}
                 💳 Créditos: {status_credito}
                 📍 Ubicación: {p.get('mapa_url') or 'Consultar asesor'}
