@@ -1,6 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 import config
+
+# ==============================================================================
+# 🚨 AQUÍ ESTÁN LAS LÍNEAS QUE FALTABAN (LOS MOTORES DE IA) 🚨
+# ==============================================================================
+llm_analista = ChatOpenAI(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, temperature=0)
+llm_vendedor = ChatOpenAI(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, temperature=0.4)
+
+
 # ==============================================================================
 # 1. PROMPT ANALISTA (EXTRACCIÓN SILENCIOSA Y MATEMÁTICA)
 # ==============================================================================
@@ -34,9 +42,6 @@ prompt_analista = ChatPromptTemplate.from_messages([
     ("human", "{mensaje}")
 ])
 
-# ==============================================================================
-# 2. PROMPT VENDEDOR (CÁLIDO, DIRECTO Y CON MEMORIA)
-# ==============================================================================
 # ==============================================================================
 # 2. PROMPT VENDEDOR (CÁLIDO, DIRECTO Y CON MEMORIA)
 # ==============================================================================
