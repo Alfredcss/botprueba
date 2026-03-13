@@ -48,36 +48,7 @@ async def whatsapp_reply(
     print(f"\n[MENSAJE] {From} -> {Body}")
     body_lower = Body.lower()
 
-    # ==============================================================================
-    # MODULO VIP (ASESORES)
-    # ==============================================================================
-    nombre_asesor_auth = database.obtener_asesor_por_telefono(From)
-    if nombre_asesor_auth:
-        comandos_vip = ["/reporte", "/exclusivas", "/inventario", "#reporte", "#inventario"]
-        
-        if any(comando in body_lower for comando in comandos_vip):
-            patron = r'(?:/reporte|/exclusivas|/inventario)\s+(?:de\s+|del\s+)?(?:la\s+|el\s+)?(?:asesora\s+|asesor\s+)?([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)'
-            match = re.search(patron, body_lower)
-            
-            asesor_objetivo = match.group(1).capitalize() if match else nombre_asesor_auth 
-            
-            # OJO: Cambia esto por tu dominio real en producción
-            base_url = "https://perceivable-mi-nonadjacently.ngrok-free.dev" 
-            link_descarga = f"{base_url}/descargar/{asesor_objetivo.replace(' ', '%20')}"
-            
-            mensaje_vip = (
-                f"🛡️ *Acceso Autorizado*\n"
-                f"Hola {nombre_asesor_auth}.\n\n"
-                f"Aquí tienes el reporte de exclusivas de *{asesor_objetivo}*:\n"
-                f"📄 {link_descarga}\n\n"
-                f"¡Éxito en tus cierres! 🤝"
-            )
-            
-            print(f"\n[🔒 SEGURIDAD] Número autorizado perteneciente a: {nombre_asesor_auth}")
-            print(f"[VIP MODO ACTIVADO] Generando reporte para: {asesor_objetivo}")
-            
-            xml = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{mensaje_vip}</Message></Response>"""
-            return Response(content=xml.strip(), media_type="text/xml")
+   
 
     # ==============================================================================
     # SILENCIADOR MANUAL DEL BOT (HUMAN IN THE LOOP)
@@ -254,201 +225,104 @@ async def whatsapp_reply(
     # Guardar en DB
     await database.guardar_cliente(Body, respuesta, From, datos_msg, cliente_existente=cliente_db)
 
-    # ==============================================================================
-    # MODULO NOTIFICACIONES
+   # ==============================================================================
+    # MODULO NOTIFICACIONES (DESBLOQUEADO TOTALMENTE)
     # ==============================================================================
     valor_asesor = str(datos_msg.get("quiere_asesor", "")).lower()
-    nombre_lead = datos_finales.get("nombre_cliente")
     correo_ya_enviado = cliente_db.get("correo_enviado", False) if cliente_db else False
     
-    if valor_asesor == "true" and nombre_lead and not correo_ya_enviado:
+    # Se eliminó la obligación de tener un nombre para alertar al asesor
+    if valor_asesor == "true" and not correo_ya_enviado:
         historial_actualizado = f"{(cliente_db.get('observaciones_generales') or '')}\nCliente: {Body}\nBot: {respuesta}"
+        nombre_seguro = datos_finales.get("nombre_cliente") or f"Nuevo Prospecto ({From})"
         
         try:
             resumen_ejecutivo = (agent.prompt_resumen | agent.llm_analista).invoke({
-                "historial": historial_actualizado,
-                "nombre": nombre_lead,
-                "telefono": From
+                "historial": historial_actualizado, "nombre": nombre_seguro, "telefono": From
             }).content
             
-            info_lead = {
-                "nombre": nombre_lead,
-                "telefono": From,
-                "zona": datos_finales.get("zona_municipio") or "No especificada",
-                "presupuesto": datos_finales.get("presupuesto") or "No especificado"
-            }
+            info_lead = {"nombre": nombre_seguro, "telefono": From, "zona": datos_finales.get("zona_municipio") or "No especificada", "presupuesto": datos_finales.get("presupuesto") or "No especificado"}
             
-            asesor_asignado = database.obtener_asesor_aleatorio()
-            telefono_asesor = asesor_asignado.get("telefono") if asesor_asignado else "whatsapp:+5214272786799"
-            nombre_asesor = asesor_asignado.get("nombre") if asesor_asignado else "Administrador"
+            asesor = database.obtener_asesor_aleatorio()
+            telefono_asesor = asesor.get("telefono") if asesor else "whatsapp:+5214272786799"
+            nombre_asesor = asesor.get("nombre") if asesor else "Administrador"
             
-            correo_destino = "richardRI1690@gmail.com" 
-            
-            mailer.enviar_notificacion_asesor(info_lead, resumen_ejecutivo, correo_destino, nombre_asesor)
+            mailer.enviar_notificacion_asesor(info_lead, resumen_ejecutivo, "richardRI1690@gmail.com", nombre_asesor)
             whatsapp_notifier.enviar_alerta_asesor(telefono_asesor, info_lead, resumen_ejecutivo)
-            
             database.supabase.table("clientes").update({"correo_enviado": True}).eq("telefono", From).execute()
         except Exception as e:
             print(f"[ERROR EN NOTIFICACIONES] {e}")
 
-    # Respuesta XML Segura
     xml = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{respuesta.replace('&','y')}</Message></Response>"""
     return Response(content=xml.strip(), media_type="text/xml")
 
-
 # ================================================================
-# ENDPOINT DE REPORTES VIP
-# ================================================================
-@app.get("/descargar/{nombre_asesor}")
-async def descargar_reporte_asesor(nombre_asesor: str):
-    datos = database.obtener_propiedades_por_asesor(nombre_asesor)
-    if not datos: return Response(content="No se encontraron propiedades.", media_type="text/plain")
-
-    stream = io.StringIO()
-    writer = csv.writer(stream, quoting=csv.QUOTE_ALL)
-    writer.writerow(list(datos[0].keys()))
-    for fila in datos:
-        writer.writerow([str(valor) if valor is not None else "" for valor in fila.values()])
-
-    stream.seek(0)
-    return StreamingResponse(
-        iter([stream.getvalue()]), media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=Inventario_{nombre_asesor}.csv"}
-    )
-
-# ================================================================
-# ENDPOINTS DEL DASHBOARD
+# ENDPOINTS DEL DASHBOARD Y ASESORES
 # ================================================================
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
     base_path = os.path.dirname(__file__)
-    path = os.path.join(base_path, "dashboard.html")
-    with open(path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+    with open(os.path.join(base_path, "dashboard.html"), "r", encoding="utf-8") as f: return HTMLResponse(content=f.read())
 
 @app.get("/conversaciones")
 def obtener_conversaciones():
     try:
         resp = database.supabase.table("clientes").select("telefono,nombre_cliente,bot_encendido,observaciones_generales,fecha_contacto,hora_contacto,leido").execute()
         clientes_db = resp.data
-        
-        def get_datetime(c):
-            f = c.get('fecha_contacto') or '1970-01-01'
-            h = c.get('hora_contacto') or '00:00:00'
-            return f"{f} {h}"
-            
-        clientes_db.sort(key=get_datetime, reverse=True)
+        clientes_db.sort(key=lambda c: f"{c.get('fecha_contacto') or '1970-01-01'} {c.get('hora_contacto') or '00:00:00'}", reverse=True)
         
         clientes = []
         for c in clientes_db:
             try:
-                tel_raw = c.get("telefono")
-                tel = str(tel_raw) if tel_raw else "Sin Número"
-                nombre_raw = c.get("nombre_cliente")
-                display = str(nombre_raw) if nombre_raw else tel
-                
+                tel = str(c.get("telefono") or "Sin Número")
+                display = str(c.get("nombre_cliente") or tel)
                 historial = str(c.get("observaciones_generales") or "")
                 lineas = [l for l in historial.split('\n') if l.strip()]
-                ultimo_msg = lineas[-1] if lineas else "Sin mensajes aún"
+                ultimo_msg = re.sub(r"^\[\d{2}:\d{2}\]\s*", "", lineas[-1] if lineas else "Sin mensajes aún").replace("Cliente:", "Cliente:").replace("Bot:", "IA:").replace("Asesor:", "Tú:")
                 
-                ultimo_msg = re.sub(r"^\[\d{2}:\d{2}\]\s*", "", ultimo_msg)
-                ultimo_msg = ultimo_msg.replace("Cliente:", "Cliente:").replace("Bot:", "IA:").replace("Asesor:", "Tú:")
-                if len(ultimo_msg) > 35: ultimo_msg = ultimo_msg[:35] + "..."
-
-                bot_estado = c.get("bot_encendido")
-                if bot_estado is None: bot_estado = True
-                
-                leido_estado = c.get("leido")
-                if leido_estado is None: leido_estado = True
-
                 clientes.append({
-                    "telefono": tel,
-                    "display": display,
-                    "bot_encendido": bool(bot_estado),
-                    "ultimo_mensaje": ultimo_msg,
-                    "leido": bool(leido_estado)
+                    "telefono": tel, "display": display, 
+                    "bot_encendido": bool(c.get("bot_encendido", True)),
+                    "ultimo_mensaje": ultimo_msg[:35] + "..." if len(ultimo_msg) > 35 else ultimo_msg,
+                    "leido": bool(c.get("leido", True))
                 })
-            except Exception:
-                continue 
-
+            except Exception: pass
         return clientes
-    except Exception as e:
-        print(f"[ALERTA DASHBOARD] Fallo crítico al cargar clientes: {e}")
-        return []
+    except Exception: return []
 
 @app.get("/chat/{telefono}")
 def obtener_chat(telefono: str):
-    try:
-        resp = database.supabase.table("clientes").select("telefono,nombre_cliente,observaciones_generales,bot_encendido").eq("telefono", telefono).execute()
-        return resp.data
-    except Exception as e:
-        return []
+    try: return database.supabase.table("clientes").select("telefono,nombre_cliente,observaciones_generales,bot_encendido").eq("telefono", telefono).execute().data
+    except Exception: return []
 
 @app.post("/api/marcar_leido/{telefono}")
 def marcar_leido(telefono: str):
-    try:
-        database.supabase.table("clientes").update({"leido": True}).eq("telefono", telefono).execute()
-        return {"status": "ok"}
-    except Exception:
-        return {"status": "error"}
+    try: database.supabase.table("clientes").update({"leido": True}).eq("telefono", telefono).execute(); return {"status": "ok"}
+    except Exception: return {"status": "error"}
 
 @app.post("/toggle_bot/{telefono}")
 def toggle_bot(telefono: str, req: ToggleRequest):
-    try:
-        database.supabase.table("clientes").update({"bot_encendido": req.estado}).eq("telefono", telefono).execute()
-        return {"status": "ok", "bot_encendido": req.estado}
-    except Exception:
-        return {"status": "error"}
+    try: database.supabase.table("clientes").update({"bot_encendido": req.estado}).eq("telefono", telefono).execute(); return {"status": "ok", "bot_encendido": req.estado}
+    except Exception: return {"status": "error"}
 
 @app.post("/api/enviar_mensaje/{telefono}")
 def enviar_mensaje_asesor(telefono: str, req: MensajeAsesorRequest):
     try:
-        client = Client(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN)
-        client.messages.create(
-            from_=whatsapp_notifier.TWILIO_NUMERO_BOT,
-            body=req.mensaje,
-            to=telefono
-        )
-    except Exception as e:
-        print(f"[ERROR TWILIO] No se pudo enviar el mensaje: {e}")
-        return {"status": "error", "detalle": str(e)}
-
-    try:
+        Client(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN).messages.create(from_=whatsapp_notifier.TWILIO_NUMERO_BOT, body=req.mensaje, to=telefono)
         cliente_db = database.obtener_cliente(telefono)
         if cliente_db:
             ahora = datetime.now()
-            hora_corta = ahora.strftime("%H:%M")
-            historial_actual = cliente_db.get("observaciones_generales") or ""
-            prefijo = "\n" if historial_actual else ""
-            nuevo_historial = f"{historial_actual}{prefijo}[{hora_corta}] Asesor: {req.mensaje}"
-            
-            database.supabase.table("clientes").update({
-                "observaciones_generales": nuevo_historial,
-                "bot_encendido": False,
-                "leido": True,
-                "fecha_contacto": ahora.strftime("%Y-%m-%d"),
-                "hora_contacto": ahora.strftime("%H:%M:%S")
-            }).eq("telefono", telefono).execute()
-    except Exception:
-        pass
+            nuevo_historial = f"{cliente_db.get('observaciones_generales') or ''}\n[{ahora.strftime('%H:%M')}] Asesor: {req.mensaje}"
+            database.supabase.table("clientes").update({"observaciones_generales": nuevo_historial, "bot_encendido": False, "leido": True, "fecha_contacto": ahora.strftime("%Y-%m-%d"), "hora_contacto": ahora.strftime("%H:%M:%S")}).eq("telefono", telefono).execute()
+        return {"status": "ok", "bot_encendido": False}
+    except Exception as e: return {"status": "error", "detalle": str(e)}
 
-    return {"status": "ok", "bot_encendido": False}
-
-# ================================================================
-# ENDPOINTS DE ASESORES (ACTIVOS/INACTIVOS)
-# ================================================================
 @app.get("/api/asesores")
 def obtener_asesores():
-    try:
-        resp = database.supabase.table("asesores").select("id, nombre, activo").order("id").execute()
-        return resp.data
-    except Exception as e:
-        return []
+    try: return database.supabase.table("asesores").select("id, nombre, activo").order("id").execute().data
+    except Exception: return []
 
 @app.post("/api/asesores/{id_asesor}/toggle")
 def toggle_asesor(id_asesor: int, req: ToggleAsesorRequest):
-    try:
-        database.supabase.table("asesores").update({"activo": req.estado}).eq("id", id_asesor).execute()
-        return {"status": "ok", "activo": req.estado}
-    except Exception as e:
-        return {"status": "error"}
+    try: database.supabase.table("asesores").update({"activo": req.estado}).eq("id", id_asesor).execute(); return {"status": "ok", "activo": req.estado}
+    except Exception: return {"status": "error"}
