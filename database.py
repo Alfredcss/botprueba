@@ -111,34 +111,43 @@ def buscar_por_clave(clave):
         print(f"[ERROR BUSQUEDA CLAVE] {e}")
         return []
 
-def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False):
-    """Búsqueda estricta y lógica: Respeta siempre el tipo de inmueble y la operación."""
+def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None):
+    """Búsqueda literal: Obedece exactamente el tipo de operación sin hacer suposiciones por precio."""
     try:
-        # 🚨 1. EL FILTRO ANTI-MEZCLAS (NUEVO)
-        # Si la IA no supo si es Venta o Renta, usamos el sentido común financiero
-        if not tipo_operacion:
-            if presupuesto and presupuesto > 150000:
-                tipo_operacion = "Venta"  # Nadie paga 150 mil de renta mensual
-            elif presupuesto and presupuesto <= 150000:
-                tipo_operacion = "Renta"  # Nadie compra una casa en 150 mil
-            else:
-                tipo_operacion = "Venta"  # Por defecto, asumimos Venta si no hay datos
+        # 🗑️ ELIMINAMOS la regla de los 150,000. 
+        # Si tipo_operacion viene vacío, no asumimos nada.
 
-        # 2. MANEJO INTELIGENTE DEL PRESUPUESTO Y EL ORDEN
+        # 1. MANEJO INTELIGENTE DEL PRESUPUESTO Y EL ORDEN
         if not presupuesto:
             presupuesto_busqueda = 1000000000
-            orden_descendente = False  # Si no hay presupuesto, mostramos de la más barata a la más cara
+            orden_descendente = False  
         else:
             presupuesto_busqueda = presupuesto * 1.2 # Margen del 20%
-            orden_descendente = True   # Si dio presupuesto, mostramos lo más top que le alcanza
+            orden_descendente = True   
 
-        # FASE 1: BÚSQUEDA IDEAL (Todo estricto)
+        # =========================================================
+        # CONSTRUCCIÓN DE LA QUERY BASE
+        # =========================================================
         query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
         
-        # 🚨 CANDADOS INQUEBRANTABLES: Nunca soltamos la Operación ni el Tipo
-        if tipo_operacion: query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
-        if tipo_inmueble: query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
+        # 🚨 CANDADO ESTRICTO DE OPERACIÓN: Solo filtra si la IA detectó "Venta" o "Renta"
+        if tipo_operacion: 
+            query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
+            
+        if tipo_inmueble: 
+            query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
         
+        # 💳 CANDADO DE CRÉDITO
+        if tipo_credito == "infonavit":
+            query = query.ilike("descripcion", "%infonavit%")
+        elif tipo_credito == "fovissste":
+            query = query.ilike("descripcion", "%fovissste%")
+        elif tipo_credito == "bancario":
+            query = query.or_("descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
+        elif tipo_credito == "general":
+            query = query.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
+
+        # Filtro de Zona
         if zona and zona.lower() != "sugerencias":
             zona_busqueda = f"municipio.ilike.*{zona}*,colonia.ilike.*{zona}*,nombre.ilike.*{zona}*"
             query = query.or_(zona_busqueda)
@@ -152,18 +161,18 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             print("[DB] Búsqueda 1 vacía. Intentando Fase 2 (Sin Zona)...")
             query_f2 = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
             
-            # Mantenemos los candados inquebrantables
             if tipo_operacion: query_f2 = query_f2.ilike("tipoOperacion", f"%{tipo_operacion}%")
             if tipo_inmueble: query_f2 = query_f2.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
+            
+            if tipo_credito == "infonavit": query_f2 = query_f2.ilike("descripcion", "%infonavit%")
+            elif tipo_credito == "fovissste": query_f2 = query_f2.ilike("descripcion", "%fovissste%")
+            elif tipo_credito == "bancario": query_f2 = query_f2.or_("descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
+            elif tipo_credito == "general": query_f2 = query_f2.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
             
             query_f2 = query_f2.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
             res_f2 = query_f2.execute()
             propiedades = res_f2.data
 
-        # ELIMINAMOS LA FASE 3 (Modo Supervivencia). 
-        # Si después de quitar la zona sigue sin haber casas de ese precio, 
-        # es mejor devolver vacío para que el bot diga la verdad.
-        
         return propiedades[:4] if propiedades else []
     except Exception as e:
         print(f"[ERROR DB BUSQUEDA] {e}")

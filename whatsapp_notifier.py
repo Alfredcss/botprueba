@@ -7,7 +7,7 @@ import config
 # CORRECTO: Usamos el punto (.) para llamar a la variable que vive dentro de config.py
 TWILIO_ACCOUNT_SID = config.TWILIO_ACCOUNT_SID
 TWILIO_AUTH_TOKEN = config.TWILIO_AUTH_TOKEN
-TWILIO_NUMERO_BOT = "whatsapp:+14155238886" # El número de tu Sandbox o el Oficial
+TWILIO_NUMERO_BOT = "whatsapp:+5214271097523" # El número de tu Sandbox o el Oficial
 
 # Inicializamos el cliente de Twilio
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
