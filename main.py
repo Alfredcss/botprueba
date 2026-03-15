@@ -169,16 +169,13 @@ async def whatsapp_reply(
     await database.guardar_cliente(Body, respuesta, From, datos_msg, cliente_existente=cliente_db)
 
     # ==============================================================================
-    # MODULO NOTIFICACIONES (DESBLOQUEADO TOTALMENTE)
+    # MODULO NOTIFICACIONES (REPARADO PARA MÚLTIPLES ASESORES)
     # ==============================================================================
     valor_asesor = str(datos_msg.get("quiere_asesor", "")).lower()
     correo_ya_enviado = cliente_db.get("correo_enviado", False) if cliente_db else False
     
-    # 🚨 Se eliminó el candado del nombre
     if valor_asesor == "true" and not correo_ya_enviado:
         historial_para_correo = (cliente_db.get("observaciones_generales") or "") if cliente_db else f"Cliente: {Body}\nBot: {respuesta}"
-        
-        # Generamos un nombre temporal si el cliente aún no nos lo ha dado
         nombre_seguro = datos_finales.get("nombre_cliente") or f"Nuevo Prospecto ({From})"
         
         try:
@@ -189,7 +186,6 @@ async def whatsapp_reply(
                 "telefono": From
             }).content
         except Exception as e:
-            print(f"[ERROR RESUMEN] {e}")
             resumen_ejecutivo = historial_para_correo 
 
         info_lead = {
@@ -201,26 +197,44 @@ async def whatsapp_reply(
         
         asesor_asignado = database.obtener_asesor_aleatorio()
         
-        correo_destino = asesor_asignado["correo"] if asesor_asignado else "alfredoferrusca885@gmail.com"
-        nombre_asesor = asesor_asignado["nombre"] if asesor_asignado else "Administrador"
+        if asesor_asignado:
+            correo_destino = asesor_asignado.get("correo") or "alfredoferrusca885@gmail.com"
+            nombre_asesor = asesor_asignado.get("nombre") or "Asesor C21"
+            
+            # 📱 FORMATEO INTELIGENTE DE TELÉFONO PARA TWILIO
+            tel_bd = str(asesor_asignado.get("telefono", "")).strip()
+            if tel_bd:
+                # Si el asesor solo puso "4271234567" en la BD, se lo reparamos a Twilio
+                if not tel_bd.startswith("whatsapp:"):
+                    if not tel_bd.startswith("+"):
+                        # Si tiene 10 digitos le agregamos el +521 de México
+                        tel_bd = f"+521{tel_bd}" if len(tel_bd) == 10 else f"+{tel_bd}"
+                    tel_bd = f"whatsapp:{tel_bd}"
+                telefono_asesor = tel_bd
+            else:
+                telefono_asesor = "whatsapp:+5214272786799" # Respaldo tuyo
+        else:
+            correo_destino = "alfredoferrusca885@gmail.com"
+            nombre_asesor = "Administrador"
+            telefono_asesor = "whatsapp:+5214272786799"
         
+        print(f"[ENVIANDO LEAD] Destino: {nombre_asesor} | Correo: {correo_destino} | WA: {telefono_asesor}")
+
         # MANDAMOS CORREO
-        mailer.enviar_notificacion_asesor(info_lead, resumen_ejecutivo, correo_destino, nombre_asesor)
+        try:
+            mailer.enviar_notificacion_asesor(info_lead, resumen_ejecutivo, correo_destino, nombre_asesor)
+        except Exception as e: print(f"[ERROR CORREO] {e}")
         
-        # MANDAMOS WHATSAPP (Solo si tienes importado whatsapp_notifier, como lo tenías en los archivos anteriores)
+        # MANDAMOS WHATSAPP
         try:
             import whatsapp_notifier
-            telefono_asesor = asesor_asignado.get("telefono") if asesor_asignado else "whatsapp:+5214272786799"
             whatsapp_notifier.enviar_alerta_asesor(telefono_asesor, info_lead, resumen_ejecutivo)
         except ImportError:
             print("[SISTEMA] No se encontró módulo whatsapp_notifier. Solo se envió correo.")
+        except Exception as e:
+            print(f"[ERROR WA NOTIFICADOR] {e}")
         
         # ACTUALIZAMOS LA BASE DE DATOS
         try:
             database.supabase.table("clientes").update({"correo_enviado": True}).eq("telefono", From).execute()
-        except Exception as e:
-            print(f"[ERROR DB ACTUALIZANDO CANDADO CORREO] {e}")
-            
-    # Respuesta XML Final
-    xml = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{respuesta.replace('&','y')}</Message></Response>"""
-    return Response(content=xml.strip(), media_type="text/xml")
+        except Exception: pass

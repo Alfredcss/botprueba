@@ -7,17 +7,12 @@ import random
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T,m2C,recamaras,banios,mapa_url,latitud,longitud,url_ficha"
 
-# ==============================================================================
-# FUNCIONES DE CLIENTES (CRM)
-# ==============================================================================
 def obtener_cliente(telefono: str):
     try:
         res = supabase.table("clientes").select("*").eq("telefono", telefono).execute()
         if res.data: return res.data[0]
         return None
-    except Exception as e:
-        print(f"[ERROR DB OBTENER CLIENTE] {e}")
-        return None
+    except Exception as e: return None
 
 async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extraidos, cliente_existente=None):
     try:
@@ -41,23 +36,18 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
 
         if cliente_existente: supabase.table("clientes").update(datos_guardar).eq("telefono", telefono).execute()
         else: supabase.table("clientes").insert(datos_guardar).execute()
-    except Exception as e:
-        print(f"[ERROR DB GUARDAR CLIENTE] {e}")
+    except Exception as e: pass
 
-# ==============================================================================
-# FUNCIONES DE PROPIEDADES (INVENTARIO Y MAPAS)
-# ==============================================================================
 def buscar_por_clave(clave):
     try:
         clave_limpia = str(clave).strip()
         res = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS).or_(f"clave.eq.{clave_limpia},id.eq.{utils.limpiar_numero(clave_limpia)}").execute()
         return res.data
-    except Exception as e:
-        return []
+    except Exception as e: return []
 
 def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None, orden_precio=None):
     try:
-        presupuesto_busqueda = (presupuesto * 1.2) if presupuesto else 1000000000
+        presupuesto_busqueda = (presupuesto * 1.2) if presupuesto and presupuesto != 999999999 else 1000000000
         
         def aplicar_filtros_base(q):
             if tipo_operacion: q = q.ilike("tipoOperacion", f"%{tipo_operacion}%")
@@ -65,37 +55,75 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             if tipo_credito == "infonavit": q = q.ilike("descripcion", "%infonavit%")
             elif tipo_credito == "fovissste": q = q.ilike("descripcion", "%fovissste%")
             elif tipo_credito == "bancario": q = q.or_("descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
-            elif tipo_credito == "general": q = q.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
             return q
 
-        query = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
+        def aplicar_zona(q):
+            if not zona or zona.lower().strip() == "sugerencias": return q
+            z_lower = zona.lower().strip()
+            
+            # Limpiamos basura (por si la IA no lo hizo)
+            for b in ["colonia ", "fraccionamiento ", "barrio ", "zona ", "en "]:
+                z_lower = z_lower.replace(b, "")
+            z_lower = z_lower.strip()
+            
+            # Si tiene coma, separamos Municipio y Colonia
+            if "," in z_lower:
+                partes = z_lower.split(",")
+                ciudad = partes[0].strip()
+                col = partes[1].strip()
+                
+                # Buscamos ciudad
+                if ciudad in ["qro", "queretaro", "querétaro"]: q = q.or_("municipio.ilike.*queretaro*,municipio.ilike.*querétaro*")
+                elif ciudad in ["sjr", "san juan", "san juan del rio", "san juan del río"]: q = q.ilike("municipio", "%san juan%")
+                elif ciudad in ["tequis", "tx", "tequisquiapan"]: q = q.ilike("municipio", "%tequisquiapan%")
+                else: q = q.ilike("municipio", f"%{ciudad}%")
+                
+                # Buscamos colonia
+                if col: q = q.ilike("colonia", f"%{col}%")
+                return q
+            else:
+                # Si no hay coma, buscamos en ambos lados usando * como comodín
+                c = z_lower
+                if c in ["qro", "queretaro", "querétaro"]: return q.or_("municipio.ilike.*queretaro*,municipio.ilike.*querétaro*")
+                elif c in ["sjr", "san juan", "san juan del rio", "san juan del río"]: return q.ilike("municipio", "%san juan%")
+                elif c in ["tequis", "tx", "tequisquiapan"]: return q.ilike("municipio", "%tequisquiapan%")
+                else:
+                    return q.or_(f"municipio.ilike.*{c}*,colonia.ilike.*{c}*,nombre.ilike.*{c}*")
+
+        # FASE 1: BÚSQUEDA ESTRICTA
+        q1 = aplicar_zona(aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)))
+        q1 = q1.lte("precio", presupuesto_busqueda)
         
-        # 🗺️ TRADUCTOR DE QRO
-        zona_limpia = zona.lower() if zona else ""
-        if zona_limpia in ["qro", "queretaro", "querétaro"]:
-            zona_busqueda = "municipio.ilike.*queretaro*,municipio.ilike.*querétaro*,municipio.ilike.*qro*,colonia.ilike.*queretaro*,colonia.ilike.*querétaro*"
-            query = query.or_(zona_busqueda)
-        elif zona and zona_limpia != "sugerencias":
-            zona_busqueda = f"municipio.ilike.*{zona}*,colonia.ilike.*{zona}*,nombre.ilike.*{zona}*"
-            query = query.or_(zona_busqueda)
-
-        query = query.lte("precio", presupuesto_busqueda)
-
-        # 🎲 LÓGICA DE ORDEN O RULETA
-        if orden_precio in ["desc", "asc"] or presupuesto:
-            # Si hay orden explícito o dio presupuesto, ordenamos por precio
+        if orden_precio in ["desc", "asc"] or (presupuesto and presupuesto != 999999999):
             orden_descendente = True if (orden_precio == "desc" or presupuesto) else False
             if orden_precio == "asc": orden_descendente = False
-            query = query.order("precio", desc=orden_descendente).limit(4)
-            propiedades = query.execute().data
+            propiedades = q1.order("precio", desc=orden_descendente).limit(4).execute().data
         else:
-            # Si solo quiere "ver opciones", traemos 20 y elegimos 4 al azar
-            query = query.limit(20)
-            resultados = query.execute().data
-            if resultados:
-                propiedades = random.sample(resultados, min(4, len(resultados)))
-            else:
-                propiedades = []
+            resultados = q1.limit(20).execute().data
+            propiedades = random.sample(resultados, min(4, len(resultados))) if resultados else []
+
+        # FASE 2: RESCATE 
+        if not propiedades and zona:
+            # 1. Quitamos límite de precio
+            q2 = aplicar_zona(aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)))
+            rescate = q2.order("precio", desc=False).limit(4).execute().data
+            
+            # 2. Quitamos restricción de "casas" (Si pide casa en Palmillas y solo hay terreno, le mostrará el terreno)
+            if not rescate:
+                q_tipo = aplicar_zona(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
+                rescate = q_tipo.order("precio", desc=False).limit(4).execute().data
+
+            # 3. Si la colonia no existe, buscamos en la ciudad entera
+            if not rescate and "," in zona.lower():
+                ciudad_sola = zona.split(",")[0].strip()
+                q3 = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
+                if "qro" in ciudad_sola or "queretaro" in ciudad_sola: q3 = q3.or_("municipio.ilike.*queretaro*,municipio.ilike.*querétaro*")
+                elif "sjr" in ciudad_sola or "san juan" in ciudad_sola: q3 = q3.ilike("municipio", "%san juan%")
+                elif "tequis" in ciudad_sola or "tx" in ciudad_sola: q3 = q3.ilike("municipio", "%tequisquiapan%")
+                else: q3 = q3.ilike("municipio", f"%{ciudad_sola}%")
+                rescate = q3.order("precio", desc=False).limit(4).execute().data
+                
+            propiedades = rescate
 
         return propiedades
     except Exception as e:
