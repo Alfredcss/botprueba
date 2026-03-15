@@ -61,28 +61,23 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             if not zona or zona.lower().strip() == "sugerencias": return q
             z_lower = zona.lower().strip()
             
-            # Limpiamos basura (por si la IA no lo hizo)
             for b in ["colonia ", "fraccionamiento ", "barrio ", "zona ", "en "]:
                 z_lower = z_lower.replace(b, "")
             z_lower = z_lower.strip()
             
-            # Si tiene coma, separamos Municipio y Colonia
             if "," in z_lower:
                 partes = z_lower.split(",")
                 ciudad = partes[0].strip()
                 col = partes[1].strip()
                 
-                # Buscamos ciudad
                 if ciudad in ["qro", "queretaro", "querétaro"]: q = q.or_("municipio.ilike.*queretaro*,municipio.ilike.*querétaro*")
                 elif ciudad in ["sjr", "san juan", "san juan del rio", "san juan del río"]: q = q.ilike("municipio", "%san juan%")
                 elif ciudad in ["tequis", "tx", "tequisquiapan"]: q = q.ilike("municipio", "%tequisquiapan%")
                 else: q = q.ilike("municipio", f"%{ciudad}%")
                 
-                # Buscamos colonia
                 if col: q = q.ilike("colonia", f"%{col}%")
                 return q
             else:
-                # Si no hay coma, buscamos en ambos lados usando * como comodín
                 c = z_lower
                 if c in ["qro", "queretaro", "querétaro"]: return q.or_("municipio.ilike.*queretaro*,municipio.ilike.*querétaro*")
                 elif c in ["sjr", "san juan", "san juan del rio", "san juan del río"]: return q.ilike("municipio", "%san juan%")
@@ -102,19 +97,19 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             resultados = q1.limit(20).execute().data
             propiedades = random.sample(resultados, min(4, len(resultados))) if resultados else []
 
-        # FASE 2: RESCATE 
-        if not propiedades and zona:
+        # FASE 2: RESCATE TOTAL (Se activa si Fase 1 devuelve 0 resultados, haya ciudad o no)
+        if not propiedades:
             # 1. Quitamos límite de precio
             q2 = aplicar_zona(aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)))
             rescate = q2.order("precio", desc=False).limit(4).execute().data
             
-            # 2. Quitamos restricción de "casas" (Si pide casa en Palmillas y solo hay terreno, le mostrará el terreno)
+            # 2. Quitamos restricción de "casas" o "terrenos"
             if not rescate:
                 q_tipo = aplicar_zona(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
                 rescate = q_tipo.order("precio", desc=False).limit(4).execute().data
 
             # 3. Si la colonia no existe, buscamos en la ciudad entera
-            if not rescate and "," in zona.lower():
+            if not rescate and zona and "," in zona.lower():
                 ciudad_sola = zona.split(",")[0].strip()
                 q3 = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
                 if "qro" in ciudad_sola or "queretaro" in ciudad_sola: q3 = q3.or_("municipio.ilike.*queretaro*,municipio.ilike.*querétaro*")
