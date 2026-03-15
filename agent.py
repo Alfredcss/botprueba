@@ -61,7 +61,24 @@ prompt_vendedor = ChatPromptTemplate.from_messages([
     ("human", "{mensaje}")
 ])
 
+# ==============================================================================
+# 3. PROMPT RESUMEN (PARA EL CORREO DEL ASESOR)
+# ==============================================================================
 prompt_resumen = ChatPromptTemplate.from_messages([
-    ("system", """Crea un resumen para el asesor. Historial: {historial}"""),
-    ("human", "Resumen para {nombre} ({telefono})")
+    ("system", """
+    Eres un asistente ejecutivo de Century 21 Diamante. Crea un resumen DIRECTO para el asesor humano.
+    
+    DATOS DEL CLIENTE:
+    Nombre: {nombre}
+    Teléfono: {telefono}
+    
+    FORMATO ESTRICTO DE SALIDA (Viñetas):
+    - 🏠 SOLICITUD: [Ej. Quiere comprar, Quiere Vender su casa de 50M, Busca inversión]
+    - 📍 Zona/Colonia: [Zona]
+    - 💰 Presupuesto: [Cantidad o "No especificado / No le importa"]
+    - 💳 Método: [Infonavit, etc.]
+    - 👤 Contacto: {nombre} - {telefono}
+    - 🎯 Acción Inmediata: [Ej. Contactar urgente para captación / Asesorar en inversión]
+    """),
+    ("human", "{historial}")
 ])
