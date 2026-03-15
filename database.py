@@ -25,14 +25,11 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         nuevo_historial = f"{observaciones_actuales}\nCliente: {mensaje_usuario}\nBot: {respuesta_bot}"
         
         ahora = datetime.now()
-        fecha_str = ahora.strftime("%Y-%m-%d") 
-        hora_str = ahora.strftime("%H:%M:%S")  
-        
         datos_guardar = {
             "telefono": telefono, 
             "observaciones_generales": nuevo_historial,
-            "fecha_contacto": fecha_str,
-            "hora_contacto": hora_str
+            "fecha_contacto": ahora.strftime("%Y-%m-%d"),
+            "hora_contacto": ahora.strftime("%H:%M:%S")
         }
 
         if datos_extraidos.get("nombre_cliente"): datos_guardar["nombre_cliente"] = datos_extraidos["nombre_cliente"]
@@ -42,10 +39,8 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         if datos_extraidos.get("origen"): datos_guardar["origen"] = datos_extraidos["origen"]
         if datos_extraidos.get("clave_propiedad"): datos_guardar["id_propiedad_opcional"] = datos_extraidos["clave_propiedad"]
 
-        if cliente_existente:
-            supabase.table("clientes").update(datos_guardar).eq("telefono", telefono).execute()
-        else:
-            supabase.table("clientes").insert(datos_guardar).execute()
+        if cliente_existente: supabase.table("clientes").update(datos_guardar).eq("telefono", telefono).execute()
+        else: supabase.table("clientes").insert(datos_guardar).execute()
     except Exception as e:
         print(f"[ERROR DB GUARDAR CLIENTE] {e}")
 
@@ -58,76 +53,55 @@ def buscar_por_clave(clave):
         res = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS).or_(f"clave.eq.{clave_limpia},id.eq.{utils.limpiar_numero(clave_limpia)}").execute()
         return res.data
     except Exception as e:
-        print(f"[ERROR BUSQUEDA CLAVE] {e}")
         return []
 
 def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None, orden_precio=None):
-    """Búsqueda estricta: No inventa resultados si no hay coincidencias."""
     try:
-        # 1. MANEJO DEL PRESUPUESTO
-        if not presupuesto:
-            presupuesto_busqueda = 1000000000
-        else:
-            presupuesto_busqueda = presupuesto * 1.2 # Margen del 20%
+        presupuesto_busqueda = (presupuesto * 1.2) if presupuesto else 1000000000
+        orden_descendente = True if (orden_precio == "desc" or presupuesto) else False
+        if orden_precio == "asc": orden_descendente = False  
 
-        # 2. MANEJO DE ORDEN DE PRECIO (Más cara / Más barata)
-        if orden_precio == "desc":
-            orden_descendente = True   
-        elif orden_precio == "asc":
-            orden_descendente = False  
-        else:
-            orden_descendente = True if presupuesto else False
+        def aplicar_filtros_base(q):
+            if tipo_operacion: q = q.ilike("tipoOperacion", f"%{tipo_operacion}%")
+            if tipo_inmueble: q = q.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
+            if tipo_credito == "infonavit": q = q.ilike("descripcion", "%infonavit%")
+            elif tipo_credito == "fovissste": q = q.ilike("descripcion", "%fovissste%")
+            elif tipo_credito == "bancario": q = q.or_("descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
+            elif tipo_credito == "general": q = q.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
+            return q
 
-        # CONSTRUCCIÓN DE LA QUERY
-        query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
-        
-        if tipo_operacion: query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
-        if tipo_inmueble: query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
-        
-        # CANDADO DE CRÉDITO
-        if tipo_credito == "infonavit":
-            query = query.ilike("descripcion", "%infonavit%")
-        elif tipo_credito == "fovissste":
-            query = query.ilike("descripcion", "%fovissste%")
-        elif tipo_credito == "bancario":
-            query = query.or_("descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
-        elif tipo_credito == "general":
-            query = query.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
-
-        # FILTRO DE ZONA ESTRICTO
+        # FASE 1: BÚSQUEDA ESTRICTA (Ideal)
+        query = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
         if zona and zona.lower() != "sugerencias":
             zona_busqueda = f"municipio.ilike.*{zona}*,colonia.ilike.*{zona}*,nombre.ilike.*{zona}*"
             query = query.or_(zona_busqueda)
-
         query = query.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
-        res = query.execute()
+        propiedades = query.execute().data
         
-        # Devolvemos exactamente lo que encontró (máximo 4). Si es 0, el main.py dispara la alerta anti-mentiras.
-        return res.data[:4] if res.data else []
+        # FASE 2: RESCATE POR PRESUPUESTO (Si pidió muy barato, le mostramos lo más cercano que tengamos)
+        if not propiedades and presupuesto:
+            q2 = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
+            if zona and zona.lower() != "sugerencias": q2 = q2.or_(zona_busqueda)
+            q2 = q2.order("precio", desc=False) # Las más baratas primero para que se acerquen a su presupuesto
+            propiedades = q2.execute().data
+
+        # FASE 3: RESCATE TOTAL (Si la zona era muy rara, quitamos la zona para mostrar ejemplos)
+        if not propiedades and zona:
+            q3 = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
+            q3 = q3.order("precio", desc=False)
+            propiedades = q3.execute().data
+
+        return propiedades[:4] if propiedades else []
     except Exception as e:
         print(f"[ERROR DB BUSQUEDA] {e}")
         return []
 
 def guardar_mapa_generado(id_propiedad, url_mapa):
-    try:
-        supabase.table("propiedades").update({"mapa_url": url_mapa}).eq("id", id_propiedad).execute()
-    except Exception as e:
-        print(f"[ERROR GUARDANDO MAPA] {e}")
+    try: supabase.table("propiedades").update({"mapa_url": url_mapa}).eq("id", id_propiedad).execute()
+    except Exception: pass
 
 def obtener_asesor_aleatorio():
     try:
-        # 🚨 IMPORTANTE: Seleccionamos el teléfono para que whatsapp_notifier pueda usarlo
         res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
-        asesores_activos = res.data
-
-        if not asesores_activos:
-            print("[ALERTA] No hay ningún asesor con activo=TRUE en Supabase.")
-            return None
-            
-        asesor_ganador = random.choice(asesores_activos)
-        print(f"[ASIGNACIÓN] La ruleta eligió a: {asesor_ganador['nombre']} ({asesor_ganador['correo']})")
-
-        return asesor_ganador
-    except Exception as e:
-        print(f"[ERROR DB OBTENER ASESOR] {e}")
-    return None
+        return random.choice(res.data) if res.data else None
+    except Exception: return None
