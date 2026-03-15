@@ -167,6 +167,8 @@ async def whatsapp_reply(
     print(f"[BOT] {respuesta}")
 
     await database.guardar_cliente(Body, respuesta, From, datos_msg, cliente_existente=cliente_db)
+    xml_respuesta = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{respuesta}</Message></Response>"""
+    return Response(content=xml_respuesta.strip(), media_type="text/xml")
 
     # ==============================================================================
     # MODULO NOTIFICACIONES (REPARADO PARA MÚLTIPLES ASESORES)
