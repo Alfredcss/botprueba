@@ -7,6 +7,9 @@ import random
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T,m2C,recamaras,banios,mapa_url,latitud,longitud,url_ficha"
 
+# ==============================================================================
+# FUNCIONES DE CLIENTES (CRM)
+# ==============================================================================
 def obtener_cliente(telefono: str):
     try:
         res = supabase.table("clientes").select("*").eq("telefono", telefono).execute()
@@ -46,6 +49,9 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
     except Exception as e:
         print(f"[ERROR DB GUARDAR CLIENTE] {e}")
 
+# ==============================================================================
+# FUNCIONES DE PROPIEDADES (INVENTARIO Y MAPAS)
+# ==============================================================================
 def buscar_por_clave(clave):
     try:
         clave_limpia = str(clave).strip()
@@ -56,12 +62,15 @@ def buscar_por_clave(clave):
         return []
 
 def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None, orden_precio=None):
+    """Búsqueda estricta: No inventa resultados si no hay coincidencias."""
     try:
+        # 1. MANEJO DEL PRESUPUESTO
         if not presupuesto:
             presupuesto_busqueda = 1000000000
         else:
-            presupuesto_busqueda = presupuesto * 1.2 
+            presupuesto_busqueda = presupuesto * 1.2 # Margen del 20%
 
+        # 2. MANEJO DE ORDEN DE PRECIO (Más cara / Más barata)
         if orden_precio == "desc":
             orden_descendente = True   
         elif orden_precio == "asc":
@@ -69,32 +78,56 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
         else:
             orden_descendente = True if presupuesto else False
 
+        # CONSTRUCCIÓN DE LA QUERY
         query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
         
         if tipo_operacion: query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
         if tipo_inmueble: query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
         
-        if tipo_credito == "infonavit": query = query.ilike("descripcion", "%infonavit%")
-        elif tipo_credito == "fovissste": query = query.ilike("descripcion", "%fovissste%")
-        elif tipo_credito == "bancario": query = query.or_("descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
-        elif tipo_credito == "general": query = query.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
+        # CANDADO DE CRÉDITO
+        if tipo_credito == "infonavit":
+            query = query.ilike("descripcion", "%infonavit%")
+        elif tipo_credito == "fovissste":
+            query = query.ilike("descripcion", "%fovissste%")
+        elif tipo_credito == "bancario":
+            query = query.or_("descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
+        elif tipo_credito == "general":
+            query = query.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
 
+        # FILTRO DE ZONA ESTRICTO
         if zona and zona.lower() != "sugerencias":
             zona_busqueda = f"municipio.ilike.*{zona}*,colonia.ilike.*{zona}*,nombre.ilike.*{zona}*"
             query = query.or_(zona_busqueda)
 
         query = query.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
         res = query.execute()
+        
+        # Devolvemos exactamente lo que encontró (máximo 4). Si es 0, el main.py dispara la alerta anti-mentiras.
         return res.data[:4] if res.data else []
     except Exception as e:
         print(f"[ERROR DB BUSQUEDA] {e}")
         return []
 
+def guardar_mapa_generado(id_propiedad, url_mapa):
+    try:
+        supabase.table("propiedades").update({"mapa_url": url_mapa}).eq("id", id_propiedad).execute()
+    except Exception as e:
+        print(f"[ERROR GUARDANDO MAPA] {e}")
+
 def obtener_asesor_aleatorio():
     try:
+        # 🚨 IMPORTANTE: Seleccionamos el teléfono para que whatsapp_notifier pueda usarlo
         res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
-        if not res.data: return None
-        return random.choice(res.data)
+        asesores_activos = res.data
+
+        if not asesores_activos:
+            print("[ALERTA] No hay ningún asesor con activo=TRUE en Supabase.")
+            return None
+            
+        asesor_ganador = random.choice(asesores_activos)
+        print(f"[ASIGNACIÓN] La ruleta eligió a: {asesor_ganador['nombre']} ({asesor_ganador['correo']})")
+
+        return asesor_ganador
     except Exception as e:
         print(f"[ERROR DB OBTENER ASESOR] {e}")
     return None
