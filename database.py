@@ -58,9 +58,7 @@ def buscar_por_clave(clave):
 def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None, orden_precio=None):
     try:
         presupuesto_busqueda = (presupuesto * 1.2) if presupuesto else 1000000000
-        orden_descendente = True if (orden_precio == "desc" or presupuesto) else False
-        if orden_precio == "asc": orden_descendente = False  
-
+        
         def aplicar_filtros_base(q):
             if tipo_operacion: q = q.ilike("tipoOperacion", f"%{tipo_operacion}%")
             if tipo_inmueble: q = q.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
@@ -70,28 +68,36 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             elif tipo_credito == "general": q = q.or_("descripcion.ilike.*infonavit*,descripcion.ilike.*fovissste*,descripcion.ilike.*bancario*,descripcion.ilike.*credito*,descripcion.ilike.*crédito*")
             return q
 
-        # FASE 1: BÚSQUEDA ESTRICTA (Ideal)
         query = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
-        if zona and zona.lower() != "sugerencias":
+        
+        # 🗺️ TRADUCTOR DE QRO
+        zona_limpia = zona.lower() if zona else ""
+        if zona_limpia in ["qro", "queretaro", "querétaro"]:
+            zona_busqueda = "municipio.ilike.*queretaro*,municipio.ilike.*querétaro*,municipio.ilike.*qro*,colonia.ilike.*queretaro*,colonia.ilike.*querétaro*"
+            query = query.or_(zona_busqueda)
+        elif zona and zona_limpia != "sugerencias":
             zona_busqueda = f"municipio.ilike.*{zona}*,colonia.ilike.*{zona}*,nombre.ilike.*{zona}*"
             query = query.or_(zona_busqueda)
-        query = query.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
-        propiedades = query.execute().data
-        
-        # FASE 2: RESCATE POR PRESUPUESTO (Si pidió muy barato, le mostramos lo más cercano que tengamos)
-        if not propiedades and presupuesto:
-            q2 = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
-            if zona and zona.lower() != "sugerencias": q2 = q2.or_(zona_busqueda)
-            q2 = q2.order("precio", desc=False) # Las más baratas primero para que se acerquen a su presupuesto
-            propiedades = q2.execute().data
 
-        # FASE 3: RESCATE TOTAL (Si la zona era muy rara, quitamos la zona para mostrar ejemplos)
-        if not propiedades and zona:
-            q3 = aplicar_filtros_base(supabase.table("propiedades").select(COLUMNAS_PERMITIDAS))
-            q3 = q3.order("precio", desc=False)
-            propiedades = q3.execute().data
+        query = query.lte("precio", presupuesto_busqueda)
 
-        return propiedades[:4] if propiedades else []
+        # 🎲 LÓGICA DE ORDEN O RULETA
+        if orden_precio in ["desc", "asc"] or presupuesto:
+            # Si hay orden explícito o dio presupuesto, ordenamos por precio
+            orden_descendente = True if (orden_precio == "desc" or presupuesto) else False
+            if orden_precio == "asc": orden_descendente = False
+            query = query.order("precio", desc=orden_descendente).limit(4)
+            propiedades = query.execute().data
+        else:
+            # Si solo quiere "ver opciones", traemos 20 y elegimos 4 al azar
+            query = query.limit(20)
+            resultados = query.execute().data
+            if resultados:
+                propiedades = random.sample(resultados, min(4, len(resultados)))
+            else:
+                propiedades = []
+
+        return propiedades
     except Exception as e:
         print(f"[ERROR DB BUSQUEDA] {e}")
         return []
