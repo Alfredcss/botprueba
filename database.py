@@ -9,49 +9,6 @@ supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T,m2C,recamaras,banios,mapa_url,latitud,longitud,url_ficha"
 
 # ==============================================================================
-# FUNCIONES VIP (ASESORES)
-# ==============================================================================
-def obtener_asesor_por_telefono(telefono: str):
-    try:
-        res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
-        if res.data: return res.data[0]["nombre"]
-        return None
-    except Exception as e:
-        print(f"[ERROR CHECK ASESOR] {e}")
-        return None
-
-def obtener_propiedades_por_asesor(nombre_asesor: str):
-    try:
-        print(f"\n[DB REPORTES] 1. Buscando ID para el asesor: '{nombre_asesor}'")
-        
-        # PASO 1: Buscar al asesor en su tabla
-        asesor_res = supabase.table("asesores").select("id, nombre").ilike("nombre", f"%{nombre_asesor}%").execute()
-        
-        if not asesor_res.data:
-            print(f"[DB REPORTES] ❌ ERROR: No existe ningún asesor llamado '{nombre_asesor}' en la tabla 'asesores'.")
-            return []
-            
-        # Extraemos el ID
-        id_del_asesor = asesor_res.data[0]["id"]
-        nombre_real = asesor_res.data[0]["nombre"]
-        print(f"[DB REPORTES] ✅ Asesor encontrado: {nombre_real} (ID: {id_del_asesor})")
-        
-        # PASO 2: Buscar las propiedades usando ese ID
-        print(f"[DB REPORTES] 2. Buscando casas donde asesor_id == {id_del_asesor}")
-        res = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS).eq("asesor_id", id_del_asesor).execute()
-        
-        if not res.data:
-            print(f"[DB REPORTES] ❌ ERROR: El ID {id_del_asesor} no tiene casas asignadas en la tabla propiedades (Revisa si en Supabase la celda dice NULL).")
-            return []
-            
-        print(f"[DB REPORTES] ✅ ÉXITO: Se encontraron {len(res.data)} propiedades para {nombre_real}.")
-        return res.data
-        
-    except Exception as e:
-        print(f"[ERROR REPORTES OCURRIDO] {e}")
-        return []
-
-# ==============================================================================
 # FUNCIONES DE CLIENTES (CRM)
 # ==============================================================================
 def obtener_cliente(telefono: str):

@@ -1,11 +1,9 @@
 import os
 import json
 import re
-import io
-import csv
 from datetime import datetime
 from fastapi import FastAPI, Form, Response
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from twilio.rest import Client
 import config
@@ -47,37 +45,6 @@ async def whatsapp_reply(
 
     print(f"\n[MENSAJE] {From} -> {Body}")
     body_lower = Body.lower()
-
-    # ==============================================================================
-    # MODULO VIP (ASESORES)
-    # ==============================================================================
-    nombre_asesor_auth = database.obtener_asesor_por_telefono(From)
-    if nombre_asesor_auth:
-        comandos_vip = ["/reporte", "/exclusivas", "/inventario", "#reporte", "#inventario"]
-        
-        if any(comando in body_lower for comando in comandos_vip):
-            patron = r'(?:/reporte|/exclusivas|/inventario)\s+(?:de\s+|del\s+)?(?:la\s+|el\s+)?(?:asesora\s+|asesor\s+)?([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)'
-            match = re.search(patron, body_lower)
-            
-            asesor_objetivo = match.group(1).capitalize() if match else nombre_asesor_auth 
-            
-            # OJO: Cambia esto por tu dominio real en producción
-            base_url = "https://perceivable-mi-nonadjacently.ngrok-free.dev" 
-            link_descarga = f"{base_url}/descargar/{asesor_objetivo.replace(' ', '%20')}"
-            
-            mensaje_vip = (
-                f"🛡️ *Acceso Autorizado*\n"
-                f"Hola {nombre_asesor_auth}.\n\n"
-                f"Aquí tienes el reporte de exclusivas de *{asesor_objetivo}*:\n"
-                f"📄 {link_descarga}\n\n"
-                f"¡Éxito en tus cierres! 🤝"
-            )
-            
-            print(f"\n[🔒 SEGURIDAD] Número autorizado perteneciente a: {nombre_asesor_auth}")
-            print(f"[VIP MODO ACTIVADO] Generando reporte para: {asesor_objetivo}")
-            
-            xml = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{mensaje_vip}</Message></Response>"""
-            return Response(content=xml.strip(), media_type="text/xml")
 
     # ==============================================================================
     # SILENCIADOR MANUAL DEL BOT (HUMAN IN THE LOOP)
@@ -159,7 +126,7 @@ async def whatsapp_reply(
     else:
         if not datos_finales["zona_municipio"]: faltante = "ZONA"
         elif not datos_finales["presupuesto"]: faltante = "PRESUPUESTO"
-        elif not datos_finales["nombre_cliente"]: faltante = "NOMBRE_SOLO_SI_HAY_CITA"
+        
 
         if faltante in ["Ninguno", "NOMBRE_SOLO_SI_HAY_CITA"] or quiere_ver or datos_finales["zona_municipio"] or datos_finales["tipo_inmueble"]:
             # Pasamos el tipo_credito_detectado a la base de datos
@@ -228,11 +195,14 @@ async def whatsapp_reply(
     
     if valor_asesor == "true" and nombre_lead and not correo_ya_enviado:
         historial_actualizado = f"{(cliente_db.get('observaciones_generales') or '')}\nCliente: {Body}\nBot: {respuesta}"
+
+        #si no hay nombre igual lo manda como nombre(sin nombre)
+        nombre_seguro = nombre_lead if nombre_lead else "Cliente (Sin nombre)"
         
         try:
             resumen_ejecutivo = (agent.prompt_resumen | agent.llm_analista).invoke({
                 "historial": historial_actualizado,
-                "nombre": nombre_lead,
+                "nombre": nombre_seguro,
                 "telefono": From
             }).content
             
