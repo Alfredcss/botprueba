@@ -163,7 +163,7 @@ async def whatsapp_reply(
         inventario = "No encontré coincidencias exactas."
 
     try:
-        respuesta = await (agent.prompt_vendedor | agent.llm_vendedor).ainvoke({
+        respuesta_ia = await (agent.prompt_vendedor | agent.llm_vendedor).ainvoke({
             "mensaje": Body, 
             "nombre_final": datos_finales["nombre_cliente"],
             "zona_final": datos_finales["zona_municipio"], 
@@ -172,7 +172,8 @@ async def whatsapp_reply(
             "dato_faltante_prioritario": faltante, 
             "inventario": inventario, 
             "historial_chat": historial
-        }).content
+        })
+        respuesta = respuesta_ia.content # <--- Aquí sacamos el texto ya que terminó de pensar
     except Exception as e:
         print(f"[ERROR GENERACION] {e}")
         respuesta = "Dame un momento, estoy consultando el inventario."
@@ -195,11 +196,12 @@ async def whatsapp_reply(
         nombre_seguro = nombre_lead if nombre_lead else "Cliente (Sin nombre)"
         
         try:
-            resumen_ejecutivo = await (agent.prompt_resumen | agent.llm_analista).ainvoke({
+            resumen_ia = await (agent.prompt_resumen | agent.llm_analista).ainvoke({
                 "historial": historial_actualizado,
                 "nombre": nombre_seguro,
                 "telefono": From
-            }).content
+            })
+            resumen_ejecutivo = resumen_ia.content 
             
             info_lead = {
                 "nombre": nombre_seguro,

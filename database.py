@@ -34,7 +34,6 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
             "hora_contacto": ahora.strftime("%H:%M:%S")
         }
 
-        # Continúa tu código normal...
         if datos_extraidos.get("nombre_cliente"): datos_guardar["nombre_cliente"] = datos_extraidos["nombre_cliente"]
         
         if datos_extraidos.get("tipo_inmueble"): datos_guardar["tipo_inmueble"] = datos_extraidos["tipo_inmueble"]
@@ -72,7 +71,7 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             presupuesto_busqueda = 1000000000
             orden_descendente = False  
         else:
-            presupuesto_busqueda = presupuesto * 1.2 # Margen del 20%
+            presupuesto_busqueda = presupuesto * 1.2 
             orden_descendente = True   
 
         # =========================================================
@@ -106,7 +105,7 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
         res = query.execute()
         propiedades = res.data
 
-        # FASE 2: BÚSQUEDA FLEXIBLE (Mismos candados, pero le perdonamos la Zona)
+        # FASE 2: BÚSQUEDA FLEXIBLE (Mismos candados, pero le perdonamos la Zona para que no se trabe)
         if not propiedades:
             print("[DB] Búsqueda 1 vacía. Intentando Fase 2 (Sin Zona)...")
             query_f2 = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
