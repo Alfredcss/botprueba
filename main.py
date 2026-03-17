@@ -140,7 +140,7 @@ async def whatsapp_reply(
             pre = p.get('precio', 0)
             desc = p.get('descripcion', '').lower()
             
-            # Etiqueta visual de créditos para el bot
+        
             acepta = {
                 "Infonavit": "infonavit" in desc,
                 "Fovissste": "fovissste" in desc,
@@ -150,15 +150,15 @@ async def whatsapp_reply(
             status_credito = f"✅ Acepta: {', '.join(creditos_aceptados)}" if creditos_aceptados else "❌ NO acepta créditos, solo pago con recursos propios"
 
             inventario += f"""
----
-🆔 Referencia: {p.get('clave', 'S/N')}
-🏠 {p.get('subtipoPropiedad', 'Propiedad')} en {p.get('tipoOperacion', 'Venta')} - {p.get('municipio', 'Zona C21')}
-💰 Precio: ${pre:,.0f}
-💳 Créditos: {status_credito}
-📝 Detalles: {p.get('descripcion', 'Sin descripción detallada.')}
-📸 Ficha: {p.get('url_ficha') or 'Consultar asesor'}
----
-"""
+                ---
+                🆔 Referencia: {p.get('clave', 'S/N')}
+                🏠 {p.get('subtipoPropiedad', 'Propiedad')} en {p.get('tipoOperacion', 'Venta')} - {p.get('municipio', 'Zona C21')}
+                💰 Precio: ${pre:,.0f}
+                💳 Créditos: {status_credito}
+                📝 Detalles: {p.get('descripcion', 'Sin descripción detallada.')}
+                📸 Ficha: {p.get('url_ficha') or 'Consultar asesor'}
+                ---
+                """
     elif quiere_ver and not datos_finales["clave_propiedad"]:
         inventario = "No encontré coincidencias exactas."
 
@@ -188,7 +188,6 @@ async def whatsapp_reply(
     valor_asesor = str(datos_msg.get("quiere_asesor", "")).lower()
     nombre_lead = datos_finales.get("nombre_cliente")
     
-    # Mantenemos "correo_enviado" para no romper tu base de datos, aunque ahora significa "alerta enviada"
     alerta_ya_enviada = cliente_db.get("correo_enviado", False) if cliente_db else False
     
     if valor_asesor == "true" and nombre_lead and not alerta_ya_enviada:
@@ -209,10 +208,9 @@ async def whatsapp_reply(
                 "presupuesto": datos_finales.get("presupuesto") or "No especificado"
             }
             
-            # 🎯 LÓGICA DE ASIGNACIÓN (Específico -> Ruleta -> Oficina)
+            #LÓGICA DE ASIGNACIÓN 
             asesor_asignado = None
             nombre_solicitado = datos_msg.get("asesor_solicitado")
-            
             # Valores por defecto (se va a la oficina si algo falla)
             nombre_final_asesor = "Oficina"
             telefono_final_asesor = whatsapp_notifier.NUMERO_OFICINA
@@ -233,18 +231,17 @@ async def whatsapp_reply(
                     nombre_final_asesor = asesor_asignado['nombre']
                     telefono_final_asesor = asesor_asignado['telefono']
 
-            # 📱 ENVIAR ALERTA DOBLE (Asesor + Oficina)
+            # ENVIAR ALERTA DOBLE (Asesor + Oficina)
             whatsapp_notifier.enviar_alerta_asesor(
                 numero_asesor=telefono_final_asesor,
                 datos_cliente=info_lead,
                 resumen_ejecutivo=resumen_ejecutivo,
                 nombre_asesor=nombre_final_asesor
             )
-            
-            # 💾 ACTUALIZAR BASE DE DATOS (Columna seguimiento)
+            # ACTUALIZAR BASE DE DATOS (Columna seguimiento)
             database.supabase.table("clientes").update({
-                "correo_enviado": True, # Tu vieja columna actuando como seguro anti-spam
-                "seguimiento": nombre_final_asesor # <--- AQUÍ SE GUARDA LA NUEVA VARIABLE
+                "correo_enviado": True, #
+                "seguimiento": nombre_final_asesor 
             }).eq("telefono", From).execute()
             
         except Exception as e:

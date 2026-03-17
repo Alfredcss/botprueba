@@ -6,7 +6,8 @@ import random
 import whatsapp_notifier
 
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T,m2C,recamaras,banios,mapa_url,latitud,longitud,url_ficha"
+COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T," \
+                        "m2C,recamaras,banios,mapa_url,latitud,longitud,url_ficha"
 
 # ==============================================================================
 # FUNCIONES DE CLIENTES (CRM)
@@ -20,13 +21,10 @@ def obtener_cliente(telefono: str):
         print(f"[ERROR DB OBTENER CLIENTE] {e}")
         return None
 
-async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extraidos, cliente_existente=None,    asesor_asignado_nombre=None):
+async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extraidos, cliente_existente=None, asesor_asignado_nombre=None):
     try:
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         nuevo_historial = f"{observaciones_actuales}\nCliente: {mensaje_usuario}\nBot: {respuesta_bot}"
-        
-        # 1. Obtenemos el momento actual
-        ahora = datetime.now()
         
         ahora = datetime.now()
         datos_guardar = {
@@ -69,10 +67,7 @@ def buscar_por_clave(clave):
 def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None):
     """Búsqueda literal: Obedece exactamente el tipo de operación sin hacer suposiciones por precio."""
     try:
-        # 🗑️ ELIMINAMOS la regla de los 150,000. 
-        # Si tipo_operacion viene vacío, no asumimos nada.
-
-        # 1. MANEJO INTELIGENTE DEL PRESUPUESTO Y EL ORDEN
+     
         if not presupuesto:
             presupuesto_busqueda = 1000000000
             orden_descendente = False  
@@ -85,7 +80,7 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
         # =========================================================
         query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
         
-        # 🚨 CANDADO ESTRICTO DE OPERACIÓN: Solo filtra si la IA detectó "Venta" o "Renta"
+        # CANDADO ESTRICTO DE OPERACIÓN: Solo filtra si la IA detectó "Venta" o "Renta"
         if tipo_operacion: 
             query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
             
@@ -141,7 +136,7 @@ def guardar_mapa_generado(id_propiedad, url_mapa):
 
 def obtener_asesor_aleatorio():
     try:
-        # 🚨 CORRECCIÓN: Agregamos 'telefono' al select para que Twilio pueda usarlo
+       
         res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
         asesores_activos = res.data
 
