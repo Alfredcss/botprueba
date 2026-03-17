@@ -20,7 +20,7 @@ def obtener_cliente(telefono: str):
         print(f"[ERROR DB OBTENER CLIENTE] {e}")
         return None
 
-async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extraidos, cliente_existente=None):
+async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extraidos, cliente_existente=None,    asesor_asignado_nombre=None):
     try:
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         nuevo_historial = f"{observaciones_actuales}\nCliente: {mensaje_usuario}\nBot: {respuesta_bot}"
@@ -28,16 +28,12 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         # 1. Obtenemos el momento actual
         ahora = datetime.now()
         
-        # 2. Formateamos exactamente como lo piden tus columnas en Supabase
-        fecha_str = ahora.strftime("%Y-%m-%d") # Formato para columna 'date' (Ej: 2026-03-03)
-        hora_str = ahora.strftime("%H:%M:%S")  # Formato para columna 'time' (Ej: 14:30:00)
-        
-        # 3. Lo inyectamos en los datos a guardar
+        ahora = datetime.now()
         datos_guardar = {
             "telefono": telefono, 
             "observaciones_generales": nuevo_historial,
-            "fecha_contacto": fecha_str,
-            "hora_contacto": hora_str
+            "fecha_contacto": ahora.strftime("%Y-%m-%d"),
+            "hora_contacto": ahora.strftime("%H:%M:%S")
         }
 
         # Continúa tu código normal...
@@ -48,6 +44,8 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         if datos_extraidos.get("presupuesto"): datos_guardar["presupuesto"] = str(datos_extraidos["presupuesto"])
         if datos_extraidos.get("origen"): datos_guardar["origen"] = datos_extraidos["origen"]
         if datos_extraidos.get("clave_propiedad"): datos_guardar["id_propiedad_opcional"] = datos_extraidos["clave_propiedad"]
+
+        if asesor_asignado_nombre: datos_guardar["seguimiento"] = asesor_asignado_nombre
 
         if cliente_existente:
             supabase.table("clientes").update(datos_guardar).eq("telefono", telefono).execute()
