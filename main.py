@@ -237,7 +237,7 @@ async def whatsapp_reply(
             whatsapp_notifier.enviar_alerta_asesor(
                 numero_asesor=telefono_final_asesor,
                 datos_cliente=info_lead,
-                resumen_ejecutivo=resumen_ejecutivo,
+                resumen_ai=resumen_ejecutivo,
                 nombre_asesor=nombre_final_asesor
             )
             # ACTUALIZAR BASE DE DATOS (Columna seguimiento)
