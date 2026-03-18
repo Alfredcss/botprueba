@@ -20,8 +20,8 @@ from twilio.rest import Client
 client = Client(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN)
 
 # Asegúrate de poner aquí tu número oficial de Twilio y el de la oficina
-NUMERO_TWILIO = "whatsapp:+1234567890" 
-NUMERO_OFICINA = "whatsapp:+521..." 
+NUMERO_TWILIO = "whatsapp:+5214271097523" 
+NUMERO_OFICINA = "whatsapp:+5214276880588" 
 
 def enviar_alerta_asesor(numero_asesor, datos_cliente, resumen_ai, nombre_asesor):
     # 1. Extraemos los datos del cliente
