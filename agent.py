@@ -2,9 +2,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 import config
 
-# Configuración de Modelos
-llm_analista = ChatOpenAI(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, temperature=0)
-llm_vendedor = ChatOpenAI(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, temperature=0.4)
+# ==============================================================================
+# CONFIGURACIÓN DE MODELOS (ACTUALIZADO A GPT-4 OMNI)
+# ==============================================================================
+llm_analista = ChatOpenAI(model="gpt-4o", api_key=config.OPENAI_API_KEY, temperature=0)
+llm_vendedor = ChatOpenAI(model="gpt-4o", api_key=config.OPENAI_API_KEY, temperature=0.4)
 
 # ==============================================================================
 # 1. PROMPT ANALISTA (EXTRACCIÓN SILENCIOSA Y MATEMÁTICA)
