@@ -95,6 +95,7 @@ async def whatsapp_reply(
         "tipo_operacion": fusionar("tipo_operacion"),
         "presupuesto": fusionar("presupuesto", es_numero=True),
         "clave_propiedad": datos_msg.get("clave_propiedad"),
+        "caracteristica": fusionar("caracteristica"),
         "origen_campana": datos_msg.get("origen_campana")
     }
 
@@ -119,14 +120,20 @@ async def whatsapp_reply(
         elif not datos_finales["presupuesto"]: faltante = "PRESUPUESTO"
         
         if faltante in ["Ninguno", "NOMBRE_SOLO_SI_HAY_CITA"] or quiere_ver or datos_finales["zona_municipio"] or datos_finales["tipo_inmueble"]:
-            propiedades = database.buscar_propiedades(
+            # 2. Ahora esperamos DOS valores de la base de datos y pasamos la caracteristica
+            propiedades, alerta_fase_2 = database.buscar_propiedades(
                 datos_finales["tipo_inmueble"], 
                 datos_finales["tipo_operacion"],
                 datos_finales["zona_municipio"],
                 datos_finales["presupuesto"], 
+                caracteristica=datos_finales["caracteristica"], # <--- NUEVO
                 mostrar_mix_general=(quiere_ver and not datos_finales["zona_municipio"]),
                 tipo_credito=tipo_credito_detectado
             )
+
+    # 3. Inyectamos la alerta si se activó la Fase 2 (Esto cura la alucinación de Praderas)
+    if alerta_fase_2:
+        inventario += f"\n\n🚨 IMPORTANTE PARA ARIA: No encontraste propiedades en la zona exacta ({datos_finales['zona_municipio']}), estas opciones son cercanas/sugerencias. Pide disculpas e indícalo al cliente."
 
     if propiedades:
         for p in propiedades:

@@ -63,10 +63,8 @@ def buscar_por_clave(clave):
         print(f"[ERROR BUSQUEDA CLAVE] {e}")
         return []
 
-def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar_mix_general=False, tipo_credito=None):
-    """Búsqueda literal: Obedece exactamente el tipo de operación sin hacer suposiciones por precio."""
+def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracteristica=None, mostrar_mix_general=False, tipo_credito=None):
     try:
-     
         if not presupuesto:
             presupuesto_busqueda = 1000000000
             orden_descendente = False  
@@ -74,63 +72,62 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, mostrar
             presupuesto_busqueda = presupuesto * 1.2 
             orden_descendente = True   
 
-        # =========================================================
-        # CONSTRUCCIÓN DE LA QUERY BASE
-        # =========================================================
         query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
         
-        # CANDADO ESTRICTO DE OPERACIÓN: Solo filtra si la IA detectó "Venta" o "Renta"
-        if tipo_operacion: 
-            query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
-            
-        if tipo_inmueble: 
-            query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
+        if tipo_operacion: query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
+        if tipo_inmueble: query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
         
-        # 💳 CANDADO DE CRÉDITO (Corregido con comodín %)
-        if tipo_credito == "infonavit":
-            query = query.ilike("descripcion", "%infonavit%")
-        elif tipo_credito == "fovissste":
-            query = query.ilike("descripcion", "%fovissste%")
-        elif tipo_credito == "bancario":
-            query = query.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
-        elif tipo_credito == "general":
-            query = query.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
+        # Filtro de Crédito
+        if tipo_credito == "infonavit": query = query.ilike("descripcion", "%infonavit%")
+        elif tipo_credito == "fovissste": query = query.ilike("descripcion", "%fovissste%")
+        elif tipo_credito == "bancario": query = query.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
+        elif tipo_credito == "general": query = query.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
 
-        # =========================================================
-        # 🌟 FILTRO DE ZONA (BÚSQUEDA PROFUNDA: Municipio, Colonia, Nombre y Descripción)
-        # =========================================================
+        # 🌟 NUEVO: Filtro independiente de Características (Alberca, Jacuzzi, etc.)
+        if caracteristica:
+            caract_limpia = str(caracteristica).strip().lower()
+            query = query.ilike("descripcion", f"%{caract_limpia}%")
+
+        # Filtro de Zona
         if zona and zona.lower() != "sugerencias":
             zona_limpia = str(zona).strip()
-            # Le pedimos que busque esa frase exacta en cualquiera de estas 4 columnas
             zona_busqueda = f"municipio.ilike.%{zona_limpia}%,colonia.ilike.%{zona_limpia}%,nombre.ilike.%{zona_limpia}%,descripcion.ilike.%{zona_limpia}%"
             query = query.or_(zona_busqueda)
 
         query = query.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
         res = query.execute()
         propiedades = res.data
+        
+        alerta_fase_2 = False # Bandera para avisarle a Aria
 
-        # FASE 2: BÚSQUEDA FLEXIBLE (Mismos candados, pero le perdonamos la Zona para que no se trabe)
+        # FASE 2: BÚSQUEDA FLEXIBLE
         if not propiedades:
             print("[DB] Búsqueda 1 vacía. Intentando Fase 2 (Sin Zona)...")
+            alerta_fase_2 = True # Encendemos la bandera
             query_f2 = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
             
             if tipo_operacion: query_f2 = query_f2.ilike("tipoOperacion", f"%{tipo_operacion}%")
             if tipo_inmueble: query_f2 = query_f2.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
             
-            # (Corregido con comodín %)
             if tipo_credito == "infonavit": query_f2 = query_f2.ilike("descripcion", "%infonavit%")
             elif tipo_credito == "fovissste": query_f2 = query_f2.ilike("descripcion", "%fovissste%")
             elif tipo_credito == "bancario": query_f2 = query_f2.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
             elif tipo_credito == "general": query_f2 = query_f2.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
             
+            # 🌟 NUEVO: Mantenemos el filtro de característica en la Fase 2
+            if caracteristica:
+                query_f2 = query_f2.ilike("descripcion", f"%{caract_limpia}%")
+            
             query_f2 = query_f2.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
             res_f2 = query_f2.execute()
             propiedades = res_f2.data
 
-        return propiedades[:4] if propiedades else []
+        # Devolvemos las propiedades Y la bandera de alerta
+        return (propiedades[:4] if propiedades else []), alerta_fase_2
+    
     except Exception as e:
         print(f"[ERROR DB BUSQUEDA] {e}")
-        return []
+        return [], False
 
 def guardar_mapa_generado(id_propiedad, url_mapa):
     try:

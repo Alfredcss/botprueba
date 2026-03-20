@@ -49,6 +49,7 @@ prompt_analista = ChatPromptTemplate.from_messages([
        - 🚨 TRUCO DE ALERTA RÁPIDA: Si el cliente quiere vender, invertir o pide asesor, y NO ha dado su nombre, devuelve "Cliente Interesado" en 'nombre_cliente'. para disparar la alerta al instante. Si sí dio su nombre real en algún momento, extráelo normal.
        Si el cliente solo hace preguntas del inventario, pide fotos o platica, devuelve false.
     7. ASESOR ESPECÍFICO (RUTEO): Si el cliente menciona el nombre de un asesor con el que quiere hablar (Ej. "busco a Alejandro", "quiero hablar con María"), extrae ese nombre. Si no, devuelve null.
+    8. AMENIDADES Y CARACTERÍSTICAS: Si el cliente pide algo específico en la descripción (ej. "alberca", "jacuzzi", "jardín", "terraza", "un piso"), extrae SOLO ESA PALABRA CLAVE principal. Si no menciona nada, devuelve null.
     
     SALIDA JSON OBLIGATORIA:
     {{
@@ -58,6 +59,7 @@ prompt_analista = ChatPromptTemplate.from_messages([
         "zona_municipio": string | null,
         "presupuesto": int | null,
         "clave_propiedad": string | null,
+        "caracteristica": string | null,
         "quiere_asesor": boolean,
         "asesor_solicitado": string | null
     }}
