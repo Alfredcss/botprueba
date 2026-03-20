@@ -3,7 +3,6 @@ import json
 import re
 from datetime import datetime
 from fastapi import FastAPI, Form, Response
-from pydantic import BaseModel
 from twilio.rest import Client
 import config
 import database
@@ -11,22 +10,16 @@ import agent
 import utils
 import whatsapp_notifier
 
+# 1. IMPORTAMOS EL MÓDULO DEL DASHBOARD (Tu código)
+from dashboard.routes import router as dashboard_router
+
 app = FastAPI()
 
-# ==============================================================================
-# MODELOS DE DATOS (DASHBOARD)
-# ==============================================================================
-class ToggleRequest(BaseModel):
-    estado: bool
-
-class MensajeAsesorRequest(BaseModel):
-    mensaje: str
-
-class ToggleAsesorRequest(BaseModel):
-    estado: bool
+# 2. CONECTAMOS EL DASHBOARD A LA APP PRINCIPAL
+app.include_router(dashboard_router)
 
 # ==============================================================================
-# ENDPOINT PRINCIPAL: WHATSAPP BOT
+# ENDPOINT PRINCIPAL: WHATSAPP BOT (Lógica intacta de tu compañero)
 # ==============================================================================
 @app.post("/whatsapp")
 async def whatsapp_reply(
@@ -252,22 +245,3 @@ async def whatsapp_reply(
     # Respuesta XML Segura
     xml = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{respuesta.replace('&','y')}</Message></Response>"""
     return Response(content=xml.strip(), media_type="text/xml")
-
-# ================================================================
-# ENDPOINTS DE ASESORES (ACTIVOS/INACTIVOS)
-# ================================================================
-@app.get("/api/asesores")
-def obtener_asesores():
-    try:
-        resp = database.supabase.table("asesores").select("id, nombre, activo").order("id").execute()
-        return resp.data
-    except Exception as e:
-        return []
-
-@app.post("/api/asesores/{id_asesor}/toggle")
-def toggle_asesor(id_asesor: int, req: ToggleAsesorRequest):
-    try:
-        database.supabase.table("asesores").update({"activo": req.estado}).eq("id", id_asesor).execute()
-        return {"status": "ok", "activo": req.estado}
-    except Exception as e:
-        return {"status": "error"}
