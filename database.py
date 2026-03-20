@@ -83,10 +83,14 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
         elif tipo_credito == "bancario": query = query.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
         elif tipo_credito == "general": query = query.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
 
-        # 🌟 NUEVO: Filtro independiente de Características (Alberca, Jacuzzi, etc.)
+        # 🌟 NUEVO: Filtro de Características (Múltiples palabras separadas por coma)
         if caracteristica:
-            caract_limpia = str(caracteristica).strip().lower()
-            query = query.ilike("descripcion", f"%{caract_limpia}%")
+            # Dividimos las palabras por comas y limpiamos los espacios
+            lista_palabras = [c.strip().lower() for c in str(caracteristica).split(",") if c.strip()]
+            
+            # Aplicamos un filtro independiente por cada amenidad (Funciona como AND)
+            for palabra in lista_palabras:
+                query = query.ilike("descripcion", f"%{palabra}%")
 
         # Filtro de Zona
         if zona and zona.lower() != "sugerencias":
@@ -114,9 +118,11 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
             elif tipo_credito == "bancario": query_f2 = query_f2.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
             elif tipo_credito == "general": query_f2 = query_f2.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
             
-            # 🌟 NUEVO: Mantenemos el filtro de característica en la Fase 2
+            # 🌟 NUEVO: Aplicamos la misma lógica de lista para las características en Fase 2
             if caracteristica:
-                query_f2 = query_f2.ilike("descripcion", f"%{caract_limpia}%")
+                lista_palabras = [c.strip().lower() for c in str(caracteristica).split(",") if c.strip()]
+                for palabra in lista_palabras:
+                    query_f2 = query_f2.ilike("descripcion", f"%{palabra}%")
             
             query_f2 = query_f2.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
             res_f2 = query_f2.execute()

@@ -104,6 +104,7 @@ async def whatsapp_reply(
     inventario = ""
     propiedades = []
     faltante = "Ninguno"
+    alerta_fase_2 = False
     quiere_ver = utils.detectar_intencion_ver_propiedades(Body)
 
     # 🔍 DETECCIÓN DE INTENCIÓN DE CRÉDITO
@@ -126,7 +127,7 @@ async def whatsapp_reply(
                 datos_finales["tipo_operacion"],
                 datos_finales["zona_municipio"],
                 datos_finales["presupuesto"], 
-                caracteristica=datos_finales["caracteristica"], # <--- NUEVO
+                caracteristica=datos_finales["caracteristica"], # <--- ESTO ESTÁ PERFECTO
                 mostrar_mix_general=(quiere_ver and not datos_finales["zona_municipio"]),
                 tipo_credito=tipo_credito_detectado
             )
@@ -134,7 +135,6 @@ async def whatsapp_reply(
     # 3. Inyectamos la alerta si se activó la Fase 2 (Esto cura la alucinación de Praderas)
     if alerta_fase_2:
         inventario += f"\n\n🚨 IMPORTANTE PARA ARIA: No encontraste propiedades en la zona exacta ({datos_finales['zona_municipio']}), estas opciones son cercanas/sugerencias. Pide disculpas e indícalo al cliente."
-
     if propiedades:
         for p in propiedades:
             pre = p.get('precio', 0)
