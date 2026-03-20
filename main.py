@@ -192,7 +192,11 @@ async def whatsapp_reply(
     alerta_ya_enviada = cliente_db.get("correo_enviado", False) if cliente_db else False
     
     if valor_asesor == "true" and nombre_lead and not alerta_ya_enviada:
-        historial_actualizado = f"{(cliente_db.get('observaciones_generales') or '')}\nCliente: {Body}\nBot: {respuesta}"
+        
+        # 🛡️ CORRECCIÓN AQUÍ: Protegemos la lectura por si el cliente es completamente nuevo
+        obs_previas = cliente_db.get('observaciones_generales', '') if cliente_db else ''
+        historial_actualizado = f"{obs_previas}\nCliente: {Body}\nBot: {respuesta}"
+        
         nombre_seguro = nombre_lead if nombre_lead else "Cliente (Sin nombre)"
         
         try:
