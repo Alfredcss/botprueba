@@ -24,8 +24,19 @@ def obtener_cliente(telefono: str):
 async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extraidos, cliente_existente=None, asesor_asignado_nombre=None):
     try:
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
-        nuevo_historial = f"{observaciones_actuales}\nCliente: {mensaje_usuario}\nBot: {respuesta_bot}"
         
+        # Generar hora
+        ahora = datetime.now()
+        hora = ahora.strftime("%H:%M")
+
+        observaciones_actuales = observaciones_actuales or ""
+        prefijo = "\n" if observaciones_actuales else ""
+
+        nuevo_historial = (
+            f"{observaciones_actuales}{prefijo}[{hora}] Cliente: {mensaje_usuario}"
+            f"\n[{hora}] Bot: {respuesta_bot}"
+        )
+
         ahora = datetime.now()
         datos_guardar = {
             "telefono": telefono, 
