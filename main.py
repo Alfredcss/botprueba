@@ -137,8 +137,11 @@ async def whatsapp_reply(
         inventario += f"\n\n🚨 IMPORTANTE PARA ARIA: No encontraste propiedades en la zona exacta ({datos_finales['zona_municipio']}), estas opciones son cercanas/sugerencias. Pide disculpas e indícalo al cliente."
     if propiedades:
         for p in propiedades:
+            if p is None:
+                continue
             pre = p.get('precio', 0)
-            desc = p.get('descripcion', '').lower()
+            desc = p.get('descripcion', '') or ''
+            desc = desc.lower()
             
         
             acepta = {
@@ -159,6 +162,7 @@ async def whatsapp_reply(
                 📸 Ficha: {p.get('url_ficha') or 'Consultar asesor'}
                 ---
                 """
+        inventario += "\n\n📋 Recuerda que los gastos notariales son independientes al precio publicado."
     elif quiere_ver and not datos_finales["clave_propiedad"]:
         inventario = "No encontré coincidencias exactas."
 
