@@ -40,7 +40,8 @@ def dashboard():
 @router.get("/conversaciones")
 def obtener_conversaciones():
     try:
-        resp = database.supabase.table("clientes").select("telefono,nombre_cliente,bot_encendido,observaciones_generales,fecha_contacto,hora_contacto,leido").execute()
+        # 🚨 CAMBIO: Agregamos la columna "seguimiento" a la consulta
+        resp = database.supabase.table("clientes").select("telefono,nombre_cliente,bot_encendido,observaciones_generales,fecha_contacto,hora_contacto,leido,seguimiento").execute()
         clientes_db = resp.data
         
         def get_datetime(c):
@@ -77,7 +78,8 @@ def obtener_conversaciones():
                     "display": display,
                     "bot_encendido": bool(bot_estado),
                     "ultimo_mensaje": ultimo_msg,
-                    "leido": bool(leido_estado)
+                    "leido": bool(leido_estado),
+                    "seguimiento": str(c.get("seguimiento") or "") # 🚨 CAMBIO: Enviamos el asesor al frontend
                 })
             except Exception:
                 continue 
@@ -115,7 +117,6 @@ def enviar_mensaje_asesor(telefono: str, req: MensajeAsesorRequest):
     try:
         client = Client(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN)
         client.messages.create(
-            # 🚨 CORRECCIÓN: Aquí estaba el error. Ahora usamos el nombre correcto de la variable.
             from_=whatsapp_notifier.NUMERO_TWILIO,
             body=req.mensaje,
             to=telefono

@@ -144,8 +144,15 @@ async def whatsapp_reply(
         inventario += f"\n\n🚨 IMPORTANTE PARA ARIA: No encontraste propiedades en la zona exacta ({datos_finales['zona_municipio']}), estas opciones son cercanas/sugerencias. Pide disculpas e indícalo al cliente."
     if propiedades:
         for p in propiedades:
+            if p is None:
+                continue
             pre = p.get('precio', 0)
+
             desc = (p.get('descripcion') or '').lower()
+
+            desc = p.get('descripcion', '') or ''
+            desc = desc.lower()
+
             
         
             acepta = {
