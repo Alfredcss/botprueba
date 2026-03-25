@@ -101,6 +101,13 @@ async def whatsapp_reply(
 
     if datos_finales["origen_campana"]: datos_msg["origen"] = datos_finales["origen_campana"]
 
+    # Limpiar caracteristicas de terminos de credito y verbos filtro para evitar choques en busqueda exacta
+    if datos_finales["caracteristica"]:
+        c_limpia = datos_finales["caracteristica"].lower()
+        stopwords_pattern = r"\b(infonavit|fovissste|bancario|credito|crédito|creditos|créditos|recursos propios|acepta|acepte|acepten|con|que|tenga|para)\b"
+        c_limpia = re.sub(stopwords_pattern, "", c_limpia)
+        datos_finales["caracteristica"] = c_limpia.strip(" ,.-")
+
     inventario = ""
     propiedades = []
     faltante = "Ninguno"
@@ -138,7 +145,7 @@ async def whatsapp_reply(
     if propiedades:
         for p in propiedades:
             pre = p.get('precio', 0)
-            desc = p.get('descripcion', '').lower()
+            desc = (p.get('descripcion') or '').lower()
             
         
             acepta = {
@@ -159,6 +166,7 @@ async def whatsapp_reply(
                 📸 Ficha: {p.get('url_ficha') or 'Consultar asesor'}
                 ---
                 """
+        inventario += "\n\n📋 Recuerda que los gastos notariales son independientes al precio publicado."
     elif quiere_ver and not datos_finales["clave_propiedad"]:
         inventario = "No encontré coincidencias exactas."
 
@@ -177,6 +185,10 @@ async def whatsapp_reply(
     except Exception as e:
         print(f"[ERROR GENERACION] {e}")
         respuesta = "Dame un momento, estoy consultando el inventario."
+
+    # 💡 FORZAR EL TEXTO DE GASTOS NOTARIALES SI SE MOSTRARON PROPIEDADES
+    if propiedades and "gastos notariales" not in respuesta.lower():
+        respuesta += "\n\n📋 Recuerda que los gastos notariales son independientes al precio publicado."
 
     print(f"[BOT] {respuesta}")
 

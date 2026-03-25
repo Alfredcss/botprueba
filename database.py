@@ -102,6 +102,10 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
         res = query.execute()
         propiedades = res.data
         
+        # 🎲 Mezclamos las propiedades para que Aria no muestre siempre las mismas 4
+        if propiedades:
+            random.shuffle(propiedades)
+            
         alerta_fase_2 = False # Bandera para avisarle a Aria
 
         # FASE 2: BÚSQUEDA FLEXIBLE
@@ -127,6 +131,9 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
             query_f2 = query_f2.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
             res_f2 = query_f2.execute()
             propiedades = res_f2.data
+            
+            if propiedades:
+                random.shuffle(propiedades)
 
         # Devolvemos las propiedades Y la bandera de alerta
         return (propiedades[:4] if propiedades else []), alerta_fase_2

@@ -37,7 +37,7 @@ FIELD EXTRACTION RULES
    - "depa", "piso", "apartment", "flat" → "Departamento"
    - "lote", "parcela", "predio", "lot", "land", "plot" → "Terreno"
    - "oficina", "despacho", "clínica", "office", "clinic" → "Consultorio"
-   - "comercio", "negocio", "tienda", "shop", "store" → "Local"
+   - "comercio", "negocio", "tienda", "shop", "store", "oficinas" → "Local"
    - "nave industrial", "galerón", "warehouse", "industrial" → "Nave"
    - "rancho", "finca", "hacienda", "farm", "ranch" → "Inmueble-productivo"
    If the search is very generic ("looking for something", "what properties do you have") or doesn't match any category, return null.
@@ -141,7 +141,8 @@ FIELD EXTRACTION RULES
    ADDITIONAL RULES:
    - Multiple features: separate by commas ("alberca, jacuzzi, terraza").
    - Synonyms for the same concept: output only ONE canonical Spanish term.
-   - Return null if the client mentions no specific feature.
+   - 🚫 CRITICAL: Do NOT extract credit types, mortgage terms, or payment methods (e.g. "Infonavit", "Fovissste", "crédito", "bancario", "recursos propios") into this field. They are handled separately.
+   - Return null if the client mentions no specific physical feature.
 
 9. CLIENT NAME (nombre_cliente):
    If the client mentions their name at any point in the current message OR history, extract it. Otherwise null (or "Cliente Interesado" if quiere_asesor is triggered without a real name — see Rule 6).
@@ -160,10 +161,8 @@ OUTPUT — STRICTLY VALID JSON (no markdown, no extra text)
     "quiere_asesor": boolean,
     "asesor_solicitado": string | null
 }}
-
-RECENT CHAT HISTORY:
-{historial_chat}
 """),
+    ("human", "RECENT CHAT HISTORY (for context only — do NOT let it override your fresh analysis of the current message):\n{historial_chat}"),
     ("human", "{mensaje}")
 ])
 
@@ -254,8 +253,7 @@ If you don't have their name: "¡Listo! Un asesor de Century 21 Diamante se pond
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧠 MEMORY — USE THE CHAT HISTORY ACTIVELY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-The CHAT HISTORY below is the full conversation so far. You MUST read it before every reply.
-Use it to:
+The conversation history is provided in context. You MUST use it before every reply to:
 - Remember what properties you already showed (never list the same property twice without a reason).
 - Remember the client's name, zone, budget, and preferences — do NOT ask for information already given.
 - Maintain conversational continuity: if they say "the second one" or "that house", look it up in the history.
@@ -263,10 +261,8 @@ Use it to:
 - Build on the conversation naturally, as a knowledgeable human agent would.
 ❌ NEVER treat each message as if it were the start of a new conversation.
 ❌ NEVER repeat your introduction if the history shows the conversation has already started.
-
-CHAT HISTORY:
-{historial_chat}
 """),
+    ("human", "CHAT HISTORY (read this to maintain continuity, then reply to the client's new message below):\n{historial_chat}"),
     ("human", "{mensaje}")
 ])
 
