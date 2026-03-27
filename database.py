@@ -7,7 +7,7 @@ import whatsapp_notifier
 
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 COLUMNAS_PERMITIDAS = "id,clave,nombre,municipio,colonia,precio,subtipoPropiedad,tipoOperacion,descripcion,m2T," \
-                        "m2C,recamaras,banios,mapa_url,latitud,longitud,url_ficha"
+                        "m2C,recamaras,banios,institucionHipotecaria,mapa_url,latitud,longitud,url_ficha"
 
 # ==============================================================================
 # FUNCIONES DE CLIENTES (CRM)
@@ -74,7 +74,7 @@ def buscar_por_clave(clave):
         print(f"[ERROR BUSQUEDA CLAVE] {e}")
         return []
 
-def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracteristica=None, mostrar_mix_general=False, tipo_credito=None):
+def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, recamaras=None, banios=None, caracteristica=None, mostrar_mix_general=False, tipo_credito=None):
     try:
         if not presupuesto:
             presupuesto_busqueda = 1000000000
@@ -86,13 +86,19 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
         query = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
         
         if tipo_operacion: query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
-        if tipo_inmueble: query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%") 
+        if tipo_inmueble:
+            # Agrupar Local, Oficina y Consultorio para mayor flexibilidad comercial
+            tipo_prefix = tipo_inmueble[:4].lower()
+            if tipo_prefix in ["loca", "ofic", "cons"]:
+                query = query.or_("subtipoPropiedad.ilike.%loca%,subtipoPropiedad.ilike.%ofic%,subtipoPropiedad.ilike.%cons%")
+            else:
+                query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
         
         # Filtro de Crédito
-        if tipo_credito == "infonavit": query = query.ilike("descripcion", "%infonavit%")
-        elif tipo_credito == "fovissste": query = query.ilike("descripcion", "%fovissste%")
-        elif tipo_credito == "bancario": query = query.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
-        elif tipo_credito == "general": query = query.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
+        if tipo_credito == "infonavit": query = query.or_("descripcion.ilike.%infonavit%,institucionHipotecaria.ilike.%infonavit%")
+        elif tipo_credito == "fovissste": query = query.or_("descripcion.ilike.%fovissste%,institucionHipotecaria.ilike.%fovissste%,descripcion.ilike.%fovisste%,institucionHipotecaria.ilike.%fovisste%,descripcion.ilike.%foviste%,institucionHipotecaria.ilike.%foviste%")
+        elif tipo_credito == "bancario": query = query.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%,institucionHipotecaria.ilike.%bancario%")
+        elif tipo_credito == "general": query = query.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%fovisste%,descripcion.ilike.%bancario%,institucionHipotecaria.ilike.%infonavit%,institucionHipotecaria.ilike.%fovissste%,institucionHipotecaria.ilike.%fovisste%,institucionHipotecaria.ilike.%bancario%")
 
         # 🌟 NUEVO: Filtro de Características (Múltiples palabras separadas por coma)
         if caracteristica:
@@ -108,6 +114,11 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
             zona_limpia = str(zona).strip()
             zona_busqueda = f"municipio.ilike.%{zona_limpia}%,colonia.ilike.%{zona_limpia}%,nombre.ilike.%{zona_limpia}%,descripcion.ilike.%{zona_limpia}%"
             query = query.or_(zona_busqueda)
+
+        if recamaras is not None:
+            query = query.or_(f"recamaras.gte.{recamaras},recamaras.is.null")
+        if banios is not None:
+            query = query.or_(f"banios.gte.{banios},banios.is.null")
 
         query = query.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
         res = query.execute()
@@ -126,12 +137,17 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
             query_f2 = supabase.table("propiedades").select(COLUMNAS_PERMITIDAS)
             
             if tipo_operacion: query_f2 = query_f2.ilike("tipoOperacion", f"%{tipo_operacion}%")
-            if tipo_inmueble: query_f2 = query_f2.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
+            if tipo_inmueble:
+                tipo_prefix_f2 = tipo_inmueble[:4].lower()
+                if tipo_prefix_f2 in ["loca", "ofic", "cons"]:
+                    query_f2 = query_f2.or_("subtipoPropiedad.ilike.%loca%,subtipoPropiedad.ilike.%ofic%,subtipoPropiedad.ilike.%cons%")
+                else:
+                    query_f2 = query_f2.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
             
-            if tipo_credito == "infonavit": query_f2 = query_f2.ilike("descripcion", "%infonavit%")
-            elif tipo_credito == "fovissste": query_f2 = query_f2.ilike("descripcion", "%fovissste%")
-            elif tipo_credito == "bancario": query_f2 = query_f2.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
-            elif tipo_credito == "general": query_f2 = query_f2.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%")
+            if tipo_credito == "infonavit": query_f2 = query_f2.or_("descripcion.ilike.%infonavit%,institucionHipotecaria.ilike.%infonavit%")
+            elif tipo_credito == "fovissste": query_f2 = query_f2.or_("descripcion.ilike.%fovissste%,institucionHipotecaria.ilike.%fovissste%,descripcion.ilike.%fovisste%,institucionHipotecaria.ilike.%fovisste%,descripcion.ilike.%foviste%,institucionHipotecaria.ilike.%foviste%")
+            elif tipo_credito == "bancario": query_f2 = query_f2.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%,institucionHipotecaria.ilike.%bancario%")
+            elif tipo_credito == "general": query_f2 = query_f2.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%fovisste%,descripcion.ilike.%bancario%,institucionHipotecaria.ilike.%infonavit%,institucionHipotecaria.ilike.%fovissste%,institucionHipotecaria.ilike.%fovisste%,institucionHipotecaria.ilike.%bancario%")
             
             # 🌟 NUEVO: Aplicamos la misma lógica de lista para las características en Fase 2
             if caracteristica:
@@ -139,6 +155,11 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, caracte
                 for palabra in lista_palabras:
                     query_f2 = query_f2.ilike("descripcion", f"%{palabra}%")
             
+            if recamaras is not None:
+                query_f2 = query_f2.or_(f"recamaras.gte.{recamaras},recamaras.is.null")
+            if banios is not None:
+                query_f2 = query_f2.or_(f"banios.gte.{banios},banios.is.null")
+                
             query_f2 = query_f2.lte("precio", presupuesto_busqueda).order("precio", desc=orden_descendente)
             res_f2 = query_f2.execute()
             propiedades = res_f2.data

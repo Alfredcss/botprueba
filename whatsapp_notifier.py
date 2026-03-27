@@ -23,18 +23,18 @@ def enviar_alerta_asesor(numero_asesor, datos_cliente, resumen_ai, nombre_asesor
     resumen_limpio = str(resumen_ai).strip()
 
     # 2. CONSTRUIMOS LA PLANTILLA EXACTA
-    mensaje_plantilla = f"""🚨 *NUEVO LEAD CENTURY 21 DIAMANTE* 🚨
+    mensaje_plantilla = f"""🚨 NUEVO LEAD CENTURY 21 DIAMANTE 🚨
 
 Hola {nombre_asesor}, el asistente virtual te ha asignado un nuevo prospecto.
 
-👤 *Cliente:* {cliente_nombre}
-📱 *Teléfono:* {cliente_telefono}
-📍 *Zona/Presupuesto:* {zona_presupuesto}
+👤 Cliente: {cliente_nombre}
+📱 Teléfono: {cliente_telefono}
+📍 Zona/Presupuesto: {zona_presupuesto}
 
-📝 *Resumen de la solicitud:*
+📝 Resumen de la solicitud:
 {resumen_limpio}
 
-Por favor, contacta a este prospecto lo antes posible. ¡Mucho éxito! 💎"""
+Por favor, contacta a este prospecto lo antes posible. ¡Mucho éxito!"""
 
     try:
         # Variable para controlar si el envío al asesor fue exitoso y a qué número

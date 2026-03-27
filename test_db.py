@@ -1,19 +1,27 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from database import buscar_propiedades
+import database
+import json
 
-print("Test 1: Only Fovissste")
-res, _ = buscar_propiedades(tipo_inmueble="Casa", tipo_operacion="Venta", zona="San Juan del Río", presupuesto=30000000, caracteristica=None, tipo_credito="fovissste")
-print(f"Found: {len(res)}")
-for p in res: print(f" - {p.get('id')} / {p.get('clave')} / {p.get('precio')}")
+propiedades = database.buscar_por_clave("609813")
+print("Propiedad Lomas de Guadalupe:")
+for p in propiedades:
+    print(p.get("municipio"), p.get("colonia"))
 
-print("\nTest 2: With caracteristica='acepte'")
-res, _ = buscar_propiedades(tipo_inmueble="Casa", tipo_operacion="Venta", zona="San Juan del Río", presupuesto=30000000, caracteristica="acepte", tipo_credito="fovissste")
-print(f"Found: {len(res)}")
-for p in res: print(f" - {p.get('id')} / {p.get('clave')} / {p.get('precio')}")
+all_props = database.buscar_propiedades(None, None, None, None, None)[0]
+print("\nMunicipios en la base de datos (con sample size):")
+municipios = [p.get("municipio") for p in all_props]
+from collections import Counter
+print(Counter(municipios))
 
-print("\nTest 3: No zona, but 30M budget, Fovissste")
-res, _ = buscar_propiedades(tipo_inmueble="Casa", tipo_operacion="Venta", zona=None, presupuesto=30000000, caracteristica=None, tipo_credito="fovissste")
-print(f"Found: {len(res)}")
-for p in res: print(f" - {p.get('id')} / {p.get('clave')} / {p.get('precio')}")
+print("\nBuscando 'San Juan':")
+res_sj = database.buscar_propiedades(None, None, "San Juan", None, None)[0]
+print("Hits:", len(res_sj))
+for p in res_sj:
+    print(p.get("clave"), p.get("municipio"), p.get("precio"))
+
+print("\nBuscando 'San Juan del Río':")
+res_sjr = database.buscar_propiedades(None, None, "San Juan del Río", None, None)[0]
+print("Hits:", len(res_sjr))
+
+print("\nBuscando 'San Juan del Rio':")
+res_sjrx = database.buscar_propiedades(None, None, "San Juan del Rio", None, None)[0]
+print("Hits:", len(res_sjrx))

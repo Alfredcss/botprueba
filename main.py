@@ -95,6 +95,8 @@ async def whatsapp_reply(
         "tipo_operacion": fusionar("tipo_operacion"),
         "presupuesto": fusionar("presupuesto", es_numero=True),
         "clave_propiedad": datos_msg.get("clave_propiedad"),
+        "recamaras": fusionar("recamaras", es_numero=True),
+        "banios": fusionar("banios", es_numero=True),
         "caracteristica": fusionar("caracteristica"),
         "origen_campana": datos_msg.get("origen_campana")
     }
@@ -134,6 +136,8 @@ async def whatsapp_reply(
                 datos_finales["tipo_operacion"],
                 datos_finales["zona_municipio"],
                 datos_finales["presupuesto"], 
+                recamaras=datos_finales["recamaras"],
+                banios=datos_finales["banios"],
                 caracteristica=datos_finales["caracteristica"], # <--- ESTO ESTÁ PERFECTO
                 mostrar_mix_general=(quiere_ver and not datos_finales["zona_municipio"]),
                 tipo_credito=tipo_credito_detectado
@@ -148,17 +152,16 @@ async def whatsapp_reply(
                 continue
             pre = p.get('precio', 0)
 
-            desc = (p.get('descripcion') or '').lower()
-
             desc = p.get('descripcion', '') or ''
             desc = desc.lower()
-
             
+            institucion = p.get('institucionHipotecaria', '') or ''
+            institucion = institucion.lower()
         
             acepta = {
-                "Infonavit": "infonavit" in desc,
-                "Fovissste": "fovissste" in desc,
-                "Bancario": "bancario" in desc or "crédito" in desc or "credito" in desc
+                "Infonavit": "infonavit" in desc or "infonavit" in institucion,
+                "Fovissste": "fovissste" in desc or "fovissste" in institucion or "fovisste" in desc or "fovisste" in institucion or "foviste" in desc or "foviste" in institucion,
+                "Bancario": "bancario" in desc or "crédito" in desc or "credito" in desc or "bancario" in institucion
             }
             creditos_aceptados = [nombre for nombre, lo_acepta in acepta.items() if lo_acepta]
             status_credito = f"✅ Acepta: {', '.join(creditos_aceptados)}" if creditos_aceptados else "❌ NO acepta créditos, solo pago con recursos propios"
@@ -194,7 +197,7 @@ async def whatsapp_reply(
         respuesta = "Dame un momento, estoy consultando el inventario."
 
     # 💡 FORZAR EL TEXTO DE GASTOS NOTARIALES SI SE MOSTRARON PROPIEDADES
-    if propiedades and "gastos notariales" not in respuesta.lower():
+    if "referencia:" in respuesta.lower() and "gastos notariales" not in respuesta.lower():
         respuesta += "\n\n📋 Recuerda que los gastos notariales son independientes al precio publicado."
 
     print(f"[BOT] {respuesta}")
