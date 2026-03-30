@@ -5,5 +5,9 @@
 venv/
 __pycache__/
 
+# Ignorar Node y módulos frontend
+node_modules/
+dist/
+
 # Ignorar archivos de sistema
 .DS_Store
