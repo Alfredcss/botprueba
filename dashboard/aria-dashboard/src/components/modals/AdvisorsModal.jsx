@@ -13,12 +13,14 @@ export default function AdvisorsModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false)
   const [newName, setNewName] = useState('')
   const [newPhone, setNewPhone] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newRecibirCorreo, setNewRecibirCorreo] = useState(false)
 
   async function fetchAdvisors() {
     setLoading(true)
     const { data, error } = await supabase
       .from('asesores')
-      .select('id, nombre, telefono, activo')
+      .select('id, nombre, telefono, activo, correo, recibir_correo')
       .order('nombre', { ascending: true })
 
     console.log('[AdvisorsModal] Respuesta Supabase:', data, 'Error:', error)
@@ -40,14 +42,26 @@ export default function AdvisorsModal({ isOpen, onClose }) {
       alert('Por favor, ingresa el nombre y el número de teléfono del asesor.')
       return
     }
+    const payload = { 
+      nombre: newName.trim(), 
+      telefono: newPhone.trim(), 
+      activo: true 
+    }
+    if (newEmail.trim()) {
+      payload.correo = newEmail.trim()
+      payload.recibir_correo = newRecibirCorreo
+    }
+
     const { error } = await supabase
       .from('asesores')
-      .insert([{ nombre: newName.trim(), telefono: newPhone.trim(), activo: true }])
+      .insert([payload])
 
     console.log('[AdvisorsModal] INSERT error:', error)
     if (!error) {
       setNewName('')
       setNewPhone('')
+      setNewEmail('')
+      setNewRecibirCorreo(false)
       fetchAdvisors()
     } else {
       alert('Error al guardar el asesor: ' + error.message)
@@ -74,6 +88,19 @@ export default function AdvisorsModal({ isOpen, onClose }) {
     if (!error) fetchAdvisors()
   }
 
+  async function handleToggleEmail(id, currentState, hasEmail) {
+    if (!hasEmail) {
+      alert('Este asesor no tiene un correo registrado. Actualiza su registro en la base de datos primero.')
+      return
+    }
+    const { error } = await supabase
+      .from('asesores')
+      .update({ recibir_correo: !currentState })
+      .eq('id', id)
+    console.log('[AdvisorsModal] TOGGLE EMAIL error:', error)
+    if (!error) fetchAdvisors()
+  }
+
   if (!isOpen) return null
 
   return (
@@ -93,26 +120,42 @@ export default function AdvisorsModal({ isOpen, onClose }) {
         {/* Add advisor form */}
         <div className="modal__add-form">
           <p className="modal__section-label">Añadir Nuevo Asesor</p>
-          <div className="modal__add-row">
+          <div className="modal__add-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <input
               type="text"
               placeholder="Nombre completo"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               className="modal__input"
-              onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
             />
             <input
               type="text"
-              placeholder="Ej. +52427..."
+              placeholder="Teléfono (Ej. +52427...)"
               value={newPhone}
               onChange={(e) => setNewPhone(e.target.value)}
               className="modal__input"
-              onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
             />
-            <button className="modal__btn-add" onClick={handleAdd}>
-              <i className="fa-solid fa-plus" />
-            </button>
+            <input
+              type="email"
+              placeholder="Correo electrónico (Opcional)"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="modal__input"
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '0.9rem', color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <input 
+                  type="checkbox" 
+                  checked={newRecibirCorreo} 
+                  onChange={(e) => setNewRecibirCorreo(e.target.checked)}
+                  disabled={!newEmail.trim()}
+                />
+                Activar envío de correos
+              </label>
+              <button className="modal__btn-add" onClick={handleAdd} style={{ marginLeft: 'auto' }}>
+                <i className="fa-solid fa-plus" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -137,16 +180,30 @@ export default function AdvisorsModal({ isOpen, onClose }) {
                   </div>
                   <div className="advisor-row__info">
                     <p className="advisor-row__name">{a.nombre}</p>
-                    <p className="advisor-row__phone">{displayTel}</p>
+                    <p className="advisor-row__phone">{displayTel} {a.correo ? `• ${a.correo}` : ''}</p>
                     <p className={`advisor-row__status ${a.activo ? 'advisor-row__status--active' : ''}`}>
                       {a.activo ? '● En Guardia' : '○ Fuera de Turno'}
                     </p>
                   </div>
-                  <div className="advisor-row__actions">
+                  <div className="advisor-row__actions" style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      className="advisor-toggle"
+                      style={{ 
+                        background: a.recibir_correo ? 'rgba(212, 175, 55, 0.2)' : 'rgba(0,0,0,0.05)', 
+                        color: a.recibir_correo ? '#d4af37' : '#999',
+                        width: '32px', height: '32px', borderRadius: '50%', border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}
+                      onClick={() => handleToggleEmail(a.id, a.recibir_correo, !!a.correo)}
+                      title={a.recibir_correo ? 'Desactivar notificaciones por correo' : 'Activar notificaciones por correo'}
+                    >
+                      <i className="fa-solid fa-envelope" />
+                    </button>
                     <button
                       className={`advisor-toggle ${a.activo ? 'advisor-toggle--on' : 'advisor-toggle--off'}`}
+                      style={{ margin: 0 }}
                       onClick={() => handleToggle(a.id, a.activo)}
-                      title={a.activo ? 'Desactivar' : 'Activar'}
+                      title={a.activo ? 'Desactivar Asesor' : 'Activar Asesor'}
                     >
                       <span className={`advisor-toggle__knob ${a.activo ? 'advisor-toggle__knob--on' : ''}`} />
                     </button>

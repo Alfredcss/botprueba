@@ -9,6 +9,7 @@ import database
 import agent
 import utils
 import whatsapp_notifier
+import mailer
 
 # 1. IMPORTAMOS EL MÓDULO DEL DASHBOARD (Tu código)
 from fastapi.middleware.cors import CORSMiddleware
@@ -252,6 +253,7 @@ async def whatsapp_reply(
             # Valores por defecto (se va a la oficina si algo falla)
             nombre_final_asesor = "Oficina"
             telefono_final_asesor = whatsapp_notifier.NUMERO_OFICINA
+            correos_destino_final = "alfredoferrusca885@gmail.com"
             
             if nombre_solicitado:
                 asesor_asignado = database.obtener_asesor_por_nombre(nombre_solicitado)
@@ -259,6 +261,8 @@ async def whatsapp_reply(
                     print(f"[ASIGNACIÓN] El cliente pidió a {asesor_asignado['nombre']} y está ACTIVO.")
                     nombre_final_asesor = asesor_asignado['nombre']
                     telefono_final_asesor = asesor_asignado['telefono']
+                    if asesor_asignado.get('recibir_correo') and asesor_asignado.get('correo'):
+                        correos_destino_final += f", {asesor_asignado['correo']}"
                 else:
                     print(f"[ASIGNACIÓN] Pidió a '{nombre_solicitado}' pero está inactivo/no existe. Va a Oficina.")
                     nombre_final_asesor = f"Oficina (Pidió a {nombre_solicitado})"
@@ -268,6 +272,8 @@ async def whatsapp_reply(
                     print(f"[ASIGNACIÓN] La ruleta eligió a: {asesor_asignado['nombre']}")
                     nombre_final_asesor = asesor_asignado['nombre']
                     telefono_final_asesor = asesor_asignado['telefono']
+                    if asesor_asignado.get('recibir_correo') and asesor_asignado.get('correo'):
+                        correos_destino_final += f", {asesor_asignado['correo']}"
 
             # ENVIAR ALERTA DOBLE (Asesor + Oficina)
             whatsapp_notifier.enviar_alerta_asesor(
@@ -276,6 +282,15 @@ async def whatsapp_reply(
                 resumen_ai=resumen_ejecutivo,
                 nombre_asesor=nombre_final_asesor
             )
+            
+            # ENVIAR ALERTA POR CORREO
+            mailer.enviar_notificacion_asesor(
+                datos_cliente=info_lead,
+                historial_completo=historial_actualizado,
+                correo_destino=correos_destino_final,
+                nombre_asesor=nombre_final_asesor
+            )
+
             # ACTUALIZAR BASE DE DATOS (Columna seguimiento)
             database.supabase.table("clientes").update({
                 "correo_enviado": True, #

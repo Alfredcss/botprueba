@@ -174,7 +174,9 @@ def agregar_asesor(req: NuevoAsesorRequest):
         nuevo = {
             "nombre": req.nombre.strip(),
             "telefono": tel_limpio,
-            "activo": True 
+            "activo": True,
+            "correo": req.correo.strip(),
+            "recibir_correo": req.recibir_correo
         }
         res = database.supabase.table("asesores").insert(nuevo).execute()
         return {"status": "ok", "data": res.data}

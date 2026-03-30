@@ -182,7 +182,7 @@ def guardar_mapa_generado(id_propiedad, url_mapa):
 
 def obtener_asesor_aleatorio():
     try:
-        res = supabase.table("asesores").select("id, nombre, correo, telefono").eq("activo", True).execute()
+        res = supabase.table("asesores").select("id, nombre, correo, telefono, recibir_correo").eq("activo", True).execute()
         asesores_activos = res.data
 
         if not asesores_activos:
@@ -195,3 +195,17 @@ def obtener_asesor_aleatorio():
     except Exception as e:
         print(f"[ERROR DB OBTENER ASESOR] {e}")
     return None
+
+def obtener_asesor_por_nombre(nombre: str):
+    """
+    Busca un asesor cuyo nombre coincida parcialmente (ilike)
+    con el nombre solicitado y que esté activo.
+    """
+    try:
+        res = supabase.table("asesores").select("id, nombre, correo, telefono, recibir_correo").eq("activo", True).ilike("nombre", f"%{nombre}%").execute()
+        if res.data:
+            return res.data[0]
+        return None
+    except Exception as e:
+        print(f"[ERROR DB OBTENER ASESOR POR NOMBRE] {e}")
+        return None
