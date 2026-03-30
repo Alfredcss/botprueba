@@ -11,9 +11,19 @@ import utils
 import whatsapp_notifier
 
 # 1. IMPORTAMOS EL MÓDULO DEL DASHBOARD (Tu código)
+from fastapi.middleware.cors import CORSMiddleware
 from dashboard.routes import router as dashboard_router
 
 app = FastAPI()
+
+# Permitir conexiones desde cualquier dominio (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 2. CONECTAMOS EL DASHBOARD A LA APP PRINCIPAL
 app.include_router(dashboard_router)
