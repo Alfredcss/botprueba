@@ -80,13 +80,8 @@ export function useConversations() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'clientes' },
         (payload) => {
-          console.log('[useConversations] Realtime UPDATE recibido:', payload)
-          // Optimistic single-row update — avoids a full re-fetch
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.telefono === payload.new.telefono ? mapCliente(payload.new) : c
-            )
-          )
+          console.log('[useConversations] Realtime UPDATE recibido, refetching...')
+          fetchConversations()
         }
       )
       .on(

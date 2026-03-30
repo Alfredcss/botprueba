@@ -67,9 +67,9 @@ export function useChat(telefono) {
           filter: `telefono=eq.${telefono}`,
         },
         (payload) => {
-          console.log('[useChat] Realtime UPDATE para', telefono, payload)
-          // Directly update from payload — no extra fetch needed
-          setRawLog(payload.new?.observaciones_generales ?? '')
+          console.log('[useChat] Realtime UPDATE para', telefono, 'refetching...')
+          // Always refetch to avoid missing TOAST columns in Realtime payload
+          fetchChat()
         }
       )
       .subscribe((status) => {
