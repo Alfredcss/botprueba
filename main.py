@@ -166,13 +166,17 @@ async def whatsapp_reply(
             desc = p.get('descripcion', '') or ''
             desc = desc.lower()
             
-            institucion = p.get('institucionHipotecaria', '') or ''
-            institucion = institucion.lower()
+            institucion_raw = p.get('institucionHipotecaria') or ''
+            if isinstance(institucion_raw, list):
+                institucion = " ".join([str(i).lower() for i in institucion_raw])
+            else:
+                institucion = str(institucion_raw).lower()
         
             acepta = {
                 "Infonavit": "infonavit" in desc or "infonavit" in institucion,
                 "Fovissste": "fovissste" in desc or "fovissste" in institucion or "fovisste" in desc or "fovisste" in institucion or "foviste" in desc or "foviste" in institucion,
-                "Bancario": "bancario" in desc or "crédito" in desc or "credito" in desc or "bancario" in institucion
+                "Bancario": "bancario" in desc or "crédito" in desc or "credito" in desc or "bancario" in institucion,
+                "Banjercito": "banjercito" in desc or "banjercito" in institucion
             }
             creditos_aceptados = [nombre for nombre, lo_acepta in acepta.items() if lo_acepta]
             status_credito = f"✅ Acepta: {', '.join(creditos_aceptados)}" if creditos_aceptados else "❌ NO acepta créditos, solo pago con recursos propios"
@@ -191,6 +195,59 @@ async def whatsapp_reply(
     elif quiere_ver and not datos_finales["clave_propiedad"]:
         inventario = "No encontré coincidencias exactas."
 
+    # === DETERMINAR ASIGNACIÓN ANTES DE RESPONDER ===
+    estado_asignacion_prompt = "No se ha solicitado asesor en este mensaje o ya se envio alerta antes."
+    
+    # Variables de asignación retenidas para despues de responder
+    asignacion_lista = False
+    info_lead_retenida = None
+    nombre_final_asesor_retenido = "Oficina"
+    telefono_final_asesor_retenido = whatsapp_notifier.NUMERO_OFICINA
+    correos_destino_final_retenido = "alfredoferrusca885@gmail.com"
+    
+    valor_asesor = str(datos_msg.get("quiere_asesor", "")).lower()
+    nombre_lead = datos_finales.get("nombre_cliente")
+    alerta_ya_enviada = cliente_db.get("correo_enviado", False) if cliente_db else False
+
+    if valor_asesor == "true" and nombre_lead and not alerta_ya_enviada:
+        asignacion_lista = True
+        nombre_seguro = nombre_lead if nombre_lead else "Cliente (Sin nombre)"
+        info_lead_retenida = {
+            "nombre": nombre_seguro,
+            "telefono": From,
+            "zona": datos_finales.get("zona_municipio") or "No especificada",
+            "presupuesto": datos_finales.get("presupuesto") or "No especificado"
+        }
+        
+        nombre_solicitado = datos_msg.get("asesor_solicitado")
+        if nombre_solicitado:
+            asesor_asignado = database.obtener_asesor_por_nombre(nombre_solicitado)
+            if asesor_asignado:
+                print(f"[ASIGNACIÓN] El cliente pidió a {asesor_asignado['nombre']} y está ACTIVO.")
+                nombre_final_asesor_retenido = asesor_asignado['nombre']
+                telefono_final_asesor_retenido = asesor_asignado['telefono']
+                if asesor_asignado.get('recibir_correo') and asesor_asignado.get('correo'):
+                    correos_destino_final_retenido += f", {asesor_asignado['correo']}"
+                estado_asignacion_prompt = f"Se asignó con éxito a {nombre_final_asesor_retenido}"
+            else:
+                print(f"[ASIGNACIÓN] Pidió a '{nombre_solicitado}' pero está inactivo/no existe. Va a ruleta.")
+                asesor_asignado = database.obtener_asesor_aleatorio()
+                if asesor_asignado:
+                    nombre_final_asesor_retenido = asesor_asignado['nombre']
+                    telefono_final_asesor_retenido = asesor_asignado['telefono']
+                    if asesor_asignado.get('recibir_correo') and asesor_asignado.get('correo'):
+                        correos_destino_final_retenido += f", {asesor_asignado['correo']}"
+                estado_asignacion_prompt = f"El cliente pidió a {nombre_solicitado} pero NO está disponible. Se asignó a {nombre_final_asesor_retenido}"
+        else:
+            asesor_asignado = database.obtener_asesor_aleatorio()
+            if asesor_asignado:
+                print(f"[ASIGNACIÓN] La ruleta eligió a: {asesor_asignado['nombre']}")
+                nombre_final_asesor_retenido = asesor_asignado['nombre']
+                telefono_final_asesor_retenido = asesor_asignado['telefono']
+                if asesor_asignado.get('recibir_correo') and asesor_asignado.get('correo'):
+                    correos_destino_final_retenido += f", {asesor_asignado['correo']}"
+            estado_asignacion_prompt = f"Se asignó con éxito a {nombre_final_asesor_retenido}"
+
     try:
         respuesta_ia = await (agent.prompt_vendedor | agent.llm_vendedor).ainvoke({
             "mensaje": Body, 
@@ -200,9 +257,10 @@ async def whatsapp_reply(
             "operacion_final": datos_finales["tipo_operacion"],
             "dato_faltante_prioritario": faltante, 
             "inventario": inventario, 
-            "historial_chat": historial
+            "historial_chat": historial,
+            "estado_asignacion": estado_asignacion_prompt
         })
-        respuesta = respuesta_ia.content # <--- Aquí sacamos el texto ya que terminó de pensar
+        respuesta = respuesta_ia.content 
     except Exception as e:
         print(f"[ERROR GENERACION] {e}")
         respuesta = "Dame un momento, estoy consultando el inventario."
@@ -217,84 +275,40 @@ async def whatsapp_reply(
     await database.guardar_cliente(Body, respuesta, From, datos_msg, cliente_existente=cliente_db)
 
     # ==============================================================================
-    # MODULO NOTIFICACIONES Y ASIGNACIÓN (REESCRITO)
+    # MODULO NOTIFICACIONES (Ejecución Post-Captura)
     # ==============================================================================
-    valor_asesor = str(datos_msg.get("quiere_asesor", "")).lower()
-    nombre_lead = datos_finales.get("nombre_cliente")
-    
-    alerta_ya_enviada = cliente_db.get("correo_enviado", False) if cliente_db else False
-    
-    if valor_asesor == "true" and nombre_lead and not alerta_ya_enviada:
-        
-        # 🛡️ CORRECCIÓN AQUÍ: Protegemos la lectura por si el cliente es completamente nuevo
+    if asignacion_lista:
         obs_previas = cliente_db.get('observaciones_generales', '') if cliente_db else ''
         historial_actualizado = f"{obs_previas}\nCliente: {Body}\nBot: {respuesta}"
-        
-        nombre_seguro = nombre_lead if nombre_lead else "Cliente (Sin nombre)"
         
         try:
             resumen_ia = await (agent.prompt_resumen | agent.llm_analista).ainvoke({
                 "historial": historial_actualizado,
-                "nombre": nombre_seguro,
+                "nombre": info_lead_retenida["nombre"],
                 "telefono": From
             })
             resumen_ejecutivo = resumen_ia.content 
-            
-            info_lead = {
-                "nombre": nombre_seguro,
-                "telefono": From,
-                "zona": datos_finales.get("zona_municipio") or "No especificada",
-                "presupuesto": datos_finales.get("presupuesto") or "No especificado"
-            }
-            
-            #LÓGICA DE ASIGNACIÓN 
-            asesor_asignado = None
-            nombre_solicitado = datos_msg.get("asesor_solicitado")
-            # Valores por defecto (se va a la oficina si algo falla)
-            nombre_final_asesor = "Oficina"
-            telefono_final_asesor = whatsapp_notifier.NUMERO_OFICINA
-            correos_destino_final = "alfredoferrusca885@gmail.com"
-            
-            if nombre_solicitado:
-                asesor_asignado = database.obtener_asesor_por_nombre(nombre_solicitado)
-                if asesor_asignado:
-                    print(f"[ASIGNACIÓN] El cliente pidió a {asesor_asignado['nombre']} y está ACTIVO.")
-                    nombre_final_asesor = asesor_asignado['nombre']
-                    telefono_final_asesor = asesor_asignado['telefono']
-                    if asesor_asignado.get('recibir_correo') and asesor_asignado.get('correo'):
-                        correos_destino_final += f", {asesor_asignado['correo']}"
-                else:
-                    print(f"[ASIGNACIÓN] Pidió a '{nombre_solicitado}' pero está inactivo/no existe. Va a Oficina.")
-                    nombre_final_asesor = f"Oficina (Pidió a {nombre_solicitado})"
-            else:
-                asesor_asignado = database.obtener_asesor_aleatorio()
-                if asesor_asignado:
-                    print(f"[ASIGNACIÓN] La ruleta eligió a: {asesor_asignado['nombre']}")
-                    nombre_final_asesor = asesor_asignado['nombre']
-                    telefono_final_asesor = asesor_asignado['telefono']
-                    if asesor_asignado.get('recibir_correo') and asesor_asignado.get('correo'):
-                        correos_destino_final += f", {asesor_asignado['correo']}"
 
             # ENVIAR ALERTA DOBLE (Asesor + Oficina)
             whatsapp_notifier.enviar_alerta_asesor(
-                numero_asesor=telefono_final_asesor,
-                datos_cliente=info_lead,
+                numero_asesor=telefono_final_asesor_retenido,
+                datos_cliente=info_lead_retenida,
                 resumen_ai=resumen_ejecutivo,
-                nombre_asesor=nombre_final_asesor
+                nombre_asesor=nombre_final_asesor_retenido
             )
             
             # ENVIAR ALERTA POR CORREO
             mailer.enviar_notificacion_asesor(
-                datos_cliente=info_lead,
+                datos_cliente=info_lead_retenida,
                 historial_completo=historial_actualizado,
-                correo_destino=correos_destino_final,
-                nombre_asesor=nombre_final_asesor
+                correo_destino=correos_destino_final_retenido,
+                nombre_asesor=nombre_final_asesor_retenido
             )
 
             # ACTUALIZAR BASE DE DATOS (Columna seguimiento)
             database.supabase.table("clientes").update({
-                "correo_enviado": True, #
-                "seguimiento": nombre_final_asesor 
+                "correo_enviado": True,
+                "seguimiento": nombre_final_asesor_retenido 
             }).eq("telefono", From).execute()
             
         except Exception as e:

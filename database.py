@@ -88,17 +88,17 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, recamar
         if tipo_operacion: query = query.ilike("tipoOperacion", f"%{tipo_operacion}%")
         if tipo_inmueble:
             # Agrupar Local, Oficina y Consultorio para mayor flexibilidad comercial
-            tipo_prefix = tipo_inmueble[:4].lower()
+            tipo_prefix = tipo_inmueble[:3].lower()
             if tipo_prefix in ["loca", "ofic", "cons"]:
                 query = query.or_("subtipoPropiedad.ilike.%loca%,subtipoPropiedad.ilike.%ofic%,subtipoPropiedad.ilike.%cons%")
             else:
                 query = query.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
         
         # Filtro de Crédito
-        if tipo_credito == "infonavit": query = query.or_("descripcion.ilike.%infonavit%,institucionHipotecaria.ilike.%infonavit%")
-        elif tipo_credito == "fovissste": query = query.or_("descripcion.ilike.%fovissste%,institucionHipotecaria.ilike.%fovissste%,descripcion.ilike.%fovisste%,institucionHipotecaria.ilike.%fovisste%,descripcion.ilike.%foviste%,institucionHipotecaria.ilike.%foviste%")
-        elif tipo_credito == "bancario": query = query.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%,institucionHipotecaria.ilike.%bancario%")
-        elif tipo_credito == "general": query = query.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%fovisste%,descripcion.ilike.%bancario%,institucionHipotecaria.ilike.%infonavit%,institucionHipotecaria.ilike.%fovissste%,institucionHipotecaria.ilike.%fovisste%,institucionHipotecaria.ilike.%bancario%")
+        if tipo_credito == "infonavit": query = query.or_('descripcion.ilike.%infonavit%,institucionHipotecaria.cs.{"INFONAVIT"}')
+        elif tipo_credito == "fovissste": query = query.or_('descripcion.ilike.%fovissste%,descripcion.ilike.%fovisste%,descripcion.ilike.%foviste%,institucionHipotecaria.cs.{"FOVISSSTE"}')
+        elif tipo_credito == "bancario": query = query.or_('descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%,institucionHipotecaria.cs.{"BANCARIO"}')
+        elif tipo_credito == "general": query = query.or_('descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,institucionHipotecaria.cs.{"INFONAVIT"},institucionHipotecaria.cs.{"FOVISSSTE"},institucionHipotecaria.cs.{"BANCARIO"}')
 
         # 🌟 NUEVO: Filtro de Características (Múltiples palabras separadas por coma)
         if caracteristica:
@@ -144,10 +144,10 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, recamar
                 else:
                     query_f2 = query_f2.ilike("subtipoPropiedad", f"%{tipo_inmueble[:4]}%")
             
-            if tipo_credito == "infonavit": query_f2 = query_f2.or_("descripcion.ilike.%infonavit%,institucionHipotecaria.ilike.%infonavit%")
-            elif tipo_credito == "fovissste": query_f2 = query_f2.or_("descripcion.ilike.%fovissste%,institucionHipotecaria.ilike.%fovissste%,descripcion.ilike.%fovisste%,institucionHipotecaria.ilike.%fovisste%,descripcion.ilike.%foviste%,institucionHipotecaria.ilike.%foviste%")
-            elif tipo_credito == "bancario": query_f2 = query_f2.or_("descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%,institucionHipotecaria.ilike.%bancario%")
-            elif tipo_credito == "general": query_f2 = query_f2.or_("descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%fovisste%,descripcion.ilike.%bancario%,institucionHipotecaria.ilike.%infonavit%,institucionHipotecaria.ilike.%fovissste%,institucionHipotecaria.ilike.%fovisste%,institucionHipotecaria.ilike.%bancario%")
+            if tipo_credito == "infonavit": query_f2 = query_f2.or_('descripcion.ilike.%infonavit%,institucionHipotecaria.cs.{"INFONAVIT"}')
+            elif tipo_credito == "fovissste": query_f2 = query_f2.or_('descripcion.ilike.%fovissste%,descripcion.ilike.%fovisste%,descripcion.ilike.%foviste%,institucionHipotecaria.cs.{"FOVISSSTE"}')
+            elif tipo_credito == "bancario": query_f2 = query_f2.or_('descripcion.ilike.%bancario%,descripcion.ilike.%credito%,descripcion.ilike.%crédito%,institucionHipotecaria.cs.{"BANCARIO"}')
+            elif tipo_credito == "general": query_f2 = query_f2.or_('descripcion.ilike.%infonavit%,descripcion.ilike.%fovissste%,descripcion.ilike.%bancario%,institucionHipotecaria.cs.{"INFONAVIT"},institucionHipotecaria.cs.{"FOVISSSTE"},institucionHipotecaria.cs.{"BANCARIO"}')
             
             # 🌟 NUEVO: Aplicamos la misma lógica de lista para las características en Fase 2
             if caracteristica:
