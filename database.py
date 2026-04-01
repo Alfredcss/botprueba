@@ -52,7 +52,10 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         if datos_extraidos.get("tipo_inmueble"): datos_guardar["tipo_inmueble"] = datos_extraidos["tipo_inmueble"]
         if datos_extraidos.get("zona_municipio"): datos_guardar["zona_municipio"] = datos_extraidos["zona_municipio"]
         if datos_extraidos.get("presupuesto"): datos_guardar["presupuesto"] = str(datos_extraidos["presupuesto"])
-        if datos_extraidos.get("origen"): datos_guardar["origen"] = datos_extraidos["origen"]
+        # Solo guardar origen si el cliente aún no tiene uno registrado (preservar la fuente original)
+        origen_existente = cliente_existente.get("origen") if cliente_existente else None
+        if datos_extraidos.get("origen") and not origen_existente:
+            datos_guardar["origen"] = datos_extraidos["origen"]
         if datos_extraidos.get("clave_propiedad"): datos_guardar["id_propiedad_opcional"] = datos_extraidos["clave_propiedad"]
 
         if asesor_asignado_nombre: datos_guardar["seguimiento"] = asesor_asignado_nombre
@@ -140,7 +143,7 @@ def buscar_propiedades(tipo_inmueble, tipo_operacion, zona, presupuesto, recamar
             
             if tipo_operacion: query_f2 = query_f2.ilike("tipoOperacion", f"%{tipo_operacion}%")
             if tipo_inmueble:
-                tipo_prefix_f2 = tipo_inmueble[:4].lower()
+                tipo_prefix_f2 = tipo_inmueble[:3].lower()
                 if tipo_prefix_f2 in ["loca", "ofic", "cons"]:
                     query_f2 = query_f2.or_("subtipoPropiedad.ilike.%loca%,subtipoPropiedad.ilike.%ofic%,subtipoPropiedad.ilike.%cons%")
                 else:

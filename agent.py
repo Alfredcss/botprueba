@@ -143,6 +143,13 @@ FIELD EXTRACTION RULES
 9. CLIENT NAME (nombre_cliente):
    Extract from current message or history. If not found and quiere_asesor=true, return "Cliente Interesado". Otherwise null.
 
+10. CAMPAIGN ORIGIN (origen_campana):
+    If the client explicitly mentions where they saw the property or how they found us, extract the source.
+    RULES:
+    - Return EXACTLY one of these values: "Facebook", "Instagram", "TikTok", "Google", "Referido", "Portales", "Otro".
+    - Map synonyms: "face", "fb", "meta" -> "Facebook"; "ig", "insta" -> "Instagram"; "tik tok", "tiktok" -> "TikTok"; "buscador", "google" -> "Google"; "me recomendaron", "recomendacion", "un amigo" -> "Referido"; "inmuebles24", "lamudi", "vivanuncios", "propiedades.com", "portal" -> "Portales".
+    - Only extract if the client EXPLICITLY states the source in their CURRENT message. Return null if not mentioned.
+
 OUTPUT -- STRICTLY VALID JSON (no markdown, no extra text):
 {{
     "nombre_cliente": string | null,
@@ -155,7 +162,8 @@ OUTPUT -- STRICTLY VALID JSON (no markdown, no extra text):
     "banios": int | null,
     "caracteristica": string | null,
     "quiere_asesor": boolean,
-    "asesor_solicitado": string | null
+    "asesor_solicitado": string | null,
+    "origen_campana": string | null
 }}
 
 
