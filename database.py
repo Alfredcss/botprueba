@@ -42,7 +42,9 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
             "telefono": telefono, 
             "observaciones_generales": nuevo_historial,
             "fecha_contacto": ahora.strftime("%Y-%m-%d"),
-            "hora_contacto": ahora.strftime("%H:%M:%S")
+            "hora_contacto": ahora.strftime("%H:%M:%S"),
+            "last_activity": ahora.isoformat(),  # Para el sistema de follow-up
+            "followup_sent": False               # Resetear al recibir nuevo mensaje
         }
 
         if datos_extraidos.get("nombre_cliente"): datos_guardar["nombre_cliente"] = datos_extraidos["nombre_cliente"]

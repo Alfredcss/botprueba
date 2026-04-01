@@ -1,9 +1,11 @@
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Form, Response
 from twilio.rest import Client
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import config
 import database
 import agent
@@ -15,7 +17,69 @@ import mailer
 from fastapi.middleware.cors import CORSMiddleware
 from dashboard.routes import router as dashboard_router
 
-app = FastAPI()
+# ==============================================================================
+# SCHEDULER — Follow-up de Leads Inactivos
+# ==============================================================================
+async def check_followup_leads():
+    """Corre cada hora. Detecta leads sin respuesta (2-24h) y manda mensaje de seguimiento."""
+    print("[FOLLOWUP] Revisando leads inactivos...")
+    try:
+        ahora  = datetime.now(timezone.utc)
+        hace2h  = (ahora - timedelta(hours=2)).isoformat()
+        hace24h = (ahora - timedelta(hours=24)).isoformat()
+
+        res = database.supabase.table("clientes") \
+            .select("telefono, nombre_cliente") \
+            .eq("bot_encendido", True) \
+            .eq("followup_sent", False) \
+            .lt("last_activity", hace2h) \
+            .gt("last_activity", hace24h) \
+            .execute()
+
+        leads = res.data or []
+        if not leads:
+            print("[FOLLOWUP] Sin leads inactivos en este momento.")
+            return
+
+        print(f"[FOLLOWUP] {len(leads)} lead(s) inactivo(s) encontrado(s).")
+        for lead in leads:
+            nombre = lead.get("nombre_cliente") or ""
+            saludo = f"\u00a1Hola {nombre}!" if nombre else "\u00a1Hola!"
+            mensaje = (
+                f"{saludo} \U0001f44b Seguimos aqu\u00ed para ayudarte.\n"
+                f"\u00bfDeseas continuar con el proceso? "
+                f"Puedo mostrarte m\u00e1s opciones o conectarte con un asesor. \U0001f60a"
+            )
+            try:
+                whatsapp_notifier.client.messages.create(
+                    from_=whatsapp_notifier.NUMERO_TWILIO,
+                    body=mensaje,
+                    to=lead["telefono"]
+                )
+                database.supabase.table("clientes") \
+                    .update({"followup_sent": True}) \
+                    .eq("telefono", lead["telefono"]) \
+                    .execute()
+                print(f"[FOLLOWUP] \u2705 Mensaje enviado a {lead['telefono']}")
+            except Exception as e:
+                print(f"[FOLLOWUP] \u274c Error con {lead['telefono']}: {e}")
+    except Exception as e:
+        print(f"[FOLLOWUP ERROR] {e}")
+
+scheduler = AsyncIOScheduler()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Arrancar el scheduler al iniciar el servidor
+    scheduler.add_job(check_followup_leads, "interval", hours=1, id="followup_leads")
+    scheduler.start()
+    print("[SCHEDULER] \u2705 Follow-up scheduler iniciado (cada hora).")
+    yield
+    # Apagar el scheduler al cerrar el servidor
+    scheduler.shutdown()
+    print("[SCHEDULER] Follow-up scheduler detenido.")
+
+app = FastAPI(lifespan=lifespan)
 
 # Permitir conexiones desde cualquier dominio (CORS)
 app.add_middleware(
@@ -68,7 +132,9 @@ async def whatsapp_reply(
                 "observaciones_generales": nuevo_historial,
                 "leido": False,
                 "fecha_contacto": ahora.strftime("%Y-%m-%d"),
-                "hora_contacto": ahora.strftime("%H:%M:%S")
+                "hora_contacto": ahora.strftime("%H:%M:%S"),
+                "last_activity": ahora.isoformat(),  # Resetear ventana de follow-up
+                "followup_sent": False               # El asesor está activo, no mandar followup
             }).eq("telefono", From).execute()
         except Exception as e:
             print(f"[ERROR ACTUALIZAR SILENCIO] {e}")
