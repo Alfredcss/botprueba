@@ -1,7 +1,7 @@
 from supabase import create_client, Client
 import config
 import utils
-from datetime import datetime
+from datetime import datetime, timezone
 import random
 import whatsapp_notifier
 
@@ -37,14 +37,14 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
             f"\n[{hora}] Bot: {respuesta_bot}"
         )
 
-        ahora = datetime.now()
+        ahora = datetime.now(timezone.utc)
         datos_guardar = {
             "telefono": telefono, 
             "observaciones_generales": nuevo_historial,
             "fecha_contacto": ahora.strftime("%Y-%m-%d"),
             "hora_contacto": ahora.strftime("%H:%M:%S"),
             "last_activity": ahora.isoformat(),  # Para el sistema de follow-up
-            "followup_sent": False               # Resetear al recibir nuevo mensaje
+            "followup_sent_at": None              # Cancelar ventana de Etapa 2 si el cliente responde
         }
 
         if datos_extraidos.get("nombre_cliente"): datos_guardar["nombre_cliente"] = datos_extraidos["nombre_cliente"]

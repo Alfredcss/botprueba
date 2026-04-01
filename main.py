@@ -54,7 +54,7 @@ async def check_followup_leads():
                 whatsapp_notifier.client.messages.create(
                     from_=whatsapp_notifier.NUMERO_TWILIO,
                     body=mensaje,
-                    to=lead["telefono"]
+                    to=lead["telefono"]1
                 )
                 database.supabase.table("clientes") \
                     .update({"followup_sent": True}) \
@@ -66,18 +66,137 @@ async def check_followup_leads():
     except Exception as e:
         print(f"[FOLLOWUP ERROR] {e}")
 
+# ==============================================================================
+# SCHEDULER RAPIDO — Follow-up en 5 min + Auto-asignación en 10 min
+# ==============================================================================
+# │ AQUÍ SE CAMBIAN LOS TIEMPOS │
+# ╟─────────────────────────────────────────└
+MINUTOS_FOLLOWUP_ETAPA1 = 20  # Minutos sin respuesta para mandar aviso
+MINUTOS_FOLLOWUP_ETAPA2 = 25  # Minutos sin respuesta para auto-asignar asesor
+MINUTOS_INTERVALO_SCHEDULER = 5  # Con qué frecuencia corre el scheduler
+# └─────────────────────────────────────────┘
+
+async def check_quick_followup():
+    """Corre cada MINUTOS_INTERVALO_SCHEDULER minutos.
+    Etapa 1: si el cliente no responde en MINUTOS_FOLLOWUP_ETAPA1 min → mensaje de seguimiento.
+    Etapa 2: si aún no responde en MINUTOS_FOLLOWUP_ETAPA2 min → auto-asignar asesor.
+    """
+    try:
+        ahora          = datetime.now(timezone.utc)
+        umbral_etapa1  = (ahora - timedelta(minutes=MINUTOS_FOLLOWUP_ETAPA1)).isoformat()
+        umbral_etapa2  = (ahora - timedelta(minutes=MINUTOS_FOLLOWUP_ETAPA2)).isoformat()
+
+        # ── ETAPA 1: Mandar mensaje de seguimiento ──────────────────────────────
+        res1 = database.supabase.table("clientes") \
+            .select("telefono, nombre_cliente") \
+            .eq("bot_encendido", True) \
+            .eq("followup_sent", False) \
+            .eq("auto_asignado", False) \
+            .lt("last_activity", umbral_etapa1) \
+            .execute()
+
+        for lead in (res1.data or []):
+            nombre  = lead.get("nombre_cliente") or ""
+            saludo  = f"\u00a1Hola {nombre}!" if nombre else "\u00a1Hola!"
+            mensaje = (
+                f"{saludo} \U0001f44b Seguimos aqu\u00ed para ayudarte.\n"
+                f"\u00bfDeseas continuar con el proceso? "
+                f"Puedo mostrarte m\u00e1s opciones o conectarte con un asesor. \U0001f60a"
+            )
+            try:
+                whatsapp_notifier.client.messages.create(
+                    from_=whatsapp_notifier.NUMERO_TWILIO,
+                    body=mensaje,
+                    to=lead["telefono"]
+                )
+                database.supabase.table("clientes").update({
+                    "followup_sent":    True,
+                    "followup_sent_at": ahora.isoformat()
+                }).eq("telefono", lead["telefono"]).execute()
+                print(f"[QUICK-FU] \u2705 Etapa 1 enviada a {lead['telefono']}")
+            except Exception as e:
+                print(f"[QUICK-FU] \u274c Etapa 1 error con {lead['telefono']}: {e}")
+
+        # ── ETAPA 2: Auto-asignar asesor ────────────────────────────────────────
+        res2 = database.supabase.table("clientes") \
+            .select("telefono, nombre_cliente, zona_municipio, presupuesto, observaciones_generales") \
+            .eq("bot_encendido", True) \
+            .eq("followup_sent", True) \
+            .eq("auto_asignado", False) \
+            .lt("followup_sent_at", umbral_etapa2) \
+            .execute()
+
+        for lead in (res2.data or []):
+            try:
+                asesor = database.obtener_asesor_aleatorio()
+                if not asesor:
+                    print("[QUICK-FU] Sin asesores activos para auto-asignar.")
+                    continue
+
+                nombre_lead = lead.get("nombre_cliente") or "Cliente Interesado"
+                info_lead = {
+                    "nombre":      nombre_lead,
+                    "telefono":    lead["telefono"],
+                    "zona":        lead.get("zona_municipio") or "No especificada",
+                    "presupuesto": lead.get("presupuesto")   or "No especificado"
+                }
+                historial   = lead.get("observaciones_generales") or ""
+                nombre_asesor = asesor["nombre"]
+                tel_asesor    = asesor["telefono"]
+                correo_destino = whatsapp_notifier.CORREO_OFICINA if hasattr(whatsapp_notifier, "CORREO_OFICINA") else "alfredoferrusca885@gmail.com"
+                if asesor.get("recibir_correo") and asesor.get("correo"):
+                    correo_destino += f", {asesor['correo']}"
+
+                # Generar resumen ejecutivo del historial con IA
+                resumen_ia = await (agent.prompt_resumen | agent.llm_analista).ainvoke({
+                    "historial": historial,
+                    "nombre":    nombre_lead,
+                    "telefono":  lead["telefono"]
+                })
+
+                # Notificar al asesor por WhatsApp y correo
+                whatsapp_notifier.enviar_alerta_asesor(
+                    numero_asesor=tel_asesor,
+                    datos_cliente=info_lead,
+                    resumen_ai=resumen_ia.content,
+                    nombre_asesor=nombre_asesor
+                )
+                mailer.enviar_notificacion_asesor(
+                    datos_cliente=info_lead,
+                    historial_completo=historial,
+                    correo_destino=correo_destino,
+                    nombre_asesor=nombre_asesor
+                )
+
+                # Actualizar cliente: pausar bot y marcar como asignado
+                database.supabase.table("clientes").update({
+                    "auto_asignado": True,
+                    "correo_enviado": True,
+                    "seguimiento":   nombre_asesor,
+                    "bot_encendido": False
+                }).eq("telefono", lead["telefono"]).execute()
+
+                print(f"[QUICK-FU] \u2705 Etapa 2: {lead['telefono']} auto-asignado a {nombre_asesor}")
+            except Exception as e:
+                print(f"[QUICK-FU] \u274c Etapa 2 error con {lead['telefono']}: {e}")
+
+    except Exception as e:
+        print(f"[QUICK-FU ERROR] {e}")
+
+
 scheduler = AsyncIOScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Arrancar el scheduler al iniciar el servidor
+    # Scheduler lento: follow-up a leads fríos (2-24h)
     scheduler.add_job(check_followup_leads, "interval", hours=1, id="followup_leads")
+    # Scheduler rápido: Etapa 1 + Etapa 2 auto-asignación (tiempos en constantes arriba)
+    scheduler.add_job(check_quick_followup, "interval", minutes=MINUTOS_INTERVALO_SCHEDULER, id="quick_followup")
     scheduler.start()
-    print("[SCHEDULER] \u2705 Follow-up scheduler iniciado (cada hora).")
+    print(f"[SCHEDULER] ✅ Schedulers iniciados (follow-up 1h + quick cada {MINUTOS_INTERVALO_SCHEDULER} min | Etapa1={MINUTOS_FOLLOWUP_ETAPA1}min, Etapa2={MINUTOS_FOLLOWUP_ETAPA2}min).")
     yield
-    # Apagar el scheduler al cerrar el servidor
     scheduler.shutdown()
-    print("[SCHEDULER] Follow-up scheduler detenido.")
+    print("[SCHEDULER] Schedulers detenidos.")
 
 app = FastAPI(lifespan=lifespan)
 
