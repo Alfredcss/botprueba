@@ -335,6 +335,18 @@ async def whatsapp_reply(
     if "referencia:" in respuesta.lower() and "gastos notariales" not in respuesta.lower():
         respuesta += "\n\n📋 Recuerda que los gastos notariales son independientes al precio publicado."
 
+    # 🛡️ GUARDIA DE FICHA TÉCNICA: inyectar fichas que el LLM haya omitido
+    if propiedades:
+        for p in propiedades:
+            if p is None:
+                continue
+            clave = str(p.get('clave', '') or '')
+            url_ficha = p.get('url_ficha') or ''
+            texto_ficha = url_ficha if url_ficha else 'Consultar asesor'
+            # Si la propiedad está referenciada en la respuesta pero su ficha no aparece
+            if clave and clave in respuesta and texto_ficha not in respuesta:
+                respuesta += f"\n\n📸 Ficha propiedad {clave}: {texto_ficha}"
+
     print(f"[BOT] {respuesta}")
 
     # Guardar primera interacción en DB
