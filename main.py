@@ -54,7 +54,7 @@ async def check_followup_leads():
                 whatsapp_notifier.client.messages.create(
                     from_=whatsapp_notifier.NUMERO_TWILIO,
                     body=mensaje,
-                    to=lead["telefono"]1
+                    to=lead["telefono"]
                 )
                 database.supabase.table("clientes") \
                     .update({"followup_sent": True}) \

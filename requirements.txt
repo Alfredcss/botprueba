@@ -10,3 +10,5 @@ twilio
 requests
 python-dotenv
 apscheduler
+httpx
+aiohttp
