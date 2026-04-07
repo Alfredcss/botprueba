@@ -67,55 +67,87 @@ async def check_followup_leads():
         print(f"[FOLLOWUP ERROR] {e}")
 
 # ==============================================================================
-# SCHEDULER RAPIDO — Follow-up en 5 min + Auto-asignación en 10 min
+# SCHEDULER RAPIDO — Follow-up en 5 min, 20 min + Auto-asignación en 25 min
 # ==============================================================================
 # │ AQUÍ SE CAMBIAN LOS TIEMPOS │
 # ╟─────────────────────────────────────────└
-MINUTOS_FOLLOWUP_ETAPA1 = 20  # Minutos sin respuesta para mandar aviso
-MINUTOS_FOLLOWUP_ETAPA2 = 25  # Minutos sin respuesta para auto-asignar asesor
+MINUTOS_FOLLOWUP_ETAPA0 = 5   # Minutos sin respuesta para mandar PRIMER aviso
+MINUTOS_FOLLOWUP_ETAPA1 = 20  # Minutos sin respuesta para mandar SEGUNDO aviso
+MINUTOS_FOLLOWUP_ETAPA2 = 25  # Minutos desde el SEGUNDO aviso para auto-asignar asesor (O bien minutos totales, ver logica)
 MINUTOS_INTERVALO_SCHEDULER = 5  # Con qué frecuencia corre el scheduler
 # └─────────────────────────────────────────┘
 
 async def check_quick_followup():
     """Corre cada MINUTOS_INTERVALO_SCHEDULER minutos.
-    Etapa 1: si el cliente no responde en MINUTOS_FOLLOWUP_ETAPA1 min → mensaje de seguimiento.
-    Etapa 2: si aún no responde en MINUTOS_FOLLOWUP_ETAPA2 min → auto-asignar asesor.
+    Etapa 0: si el cliente no responde en MINUTOS_FOLLOWUP_ETAPA0 min → mensaje amigable.
+    Etapa 1: si no responde en MINUTOS_FOLLOWUP_ETAPA1 min → segundo mensaje de seguimiento.
+    Etapa 2: si aún no responde en MINUTOS_FOLLOWUP_ETAPA2 min después del último aviso → auto-asignar asesor.
     """
     try:
         ahora          = datetime.now(timezone.utc)
-        umbral_etapa1  = (ahora - timedelta(minutes=MINUTOS_FOLLOWUP_ETAPA1)).isoformat()
+        umbral_etapa0  = (ahora - timedelta(minutes=MINUTOS_FOLLOWUP_ETAPA0))
+        umbral_etapa1  = (ahora - timedelta(minutes=MINUTOS_FOLLOWUP_ETAPA1))
         umbral_etapa2  = (ahora - timedelta(minutes=MINUTOS_FOLLOWUP_ETAPA2)).isoformat()
 
-        # ── ETAPA 1: Mandar mensaje de seguimiento ──────────────────────────────
+        # ── ETAPAS 0 y 1: Mensajes de seguimiento ──────────────────────────────
+        # Consultamos todos los que no han llegado a Etapa 1 completa y no están asignados
         res1 = database.supabase.table("clientes") \
-            .select("telefono, nombre_cliente") \
+            .select("telefono, nombre_cliente, last_activity, observaciones_generales") \
             .eq("bot_encendido", True) \
             .eq("followup_sent", False) \
             .eq("auto_asignado", False) \
-            .lt("last_activity", umbral_etapa1) \
             .execute()
 
         for lead in (res1.data or []):
-            nombre  = lead.get("nombre_cliente") or ""
-            saludo  = f"\u00a1Hola {nombre}!" if nombre else "\u00a1Hola!"
-            mensaje = (
-                f"{saludo} \U0001f44b Seguimos aqu\u00ed para ayudarte.\n"
-                f"\u00bfDeseas continuar con el proceso? "
-                f"Puedo mostrarte m\u00e1s opciones o conectarte con un asesor. \U0001f60a"
-            )
             try:
-                whatsapp_notifier.client.messages.create(
-                    from_=whatsapp_notifier.NUMERO_TWILIO,
-                    body=mensaje,
-                    to=lead["telefono"]
-                )
-                database.supabase.table("clientes").update({
-                    "followup_sent":    True,
-                    "followup_sent_at": ahora.isoformat()
-                }).eq("telefono", lead["telefono"]).execute()
-                print(f"[QUICK-FU] \u2705 Etapa 1 enviada a {lead['telefono']}")
+                last_activity_str = lead.get("last_activity")
+                if not last_activity_str:
+                    continue
+                last_activity = datetime.fromisoformat(last_activity_str.replace("Z", "+00:00"))
+                observaciones = lead.get("observaciones_generales") or ""
+                nombre = lead.get("nombre_cliente") or ""
+                saludo = f"\u00a1Hola {nombre}!" if nombre else "\u00a1Hola!"
+
+                # Verificamos si ya enviamos el de 5 min (Etapa 0) revisando el historial oculto o parseando
+                ya_envio_5m = "[FW-5M]" in observaciones
+
+                if not ya_envio_5m and last_activity < umbral_etapa0:
+                    # ETAPA 0: 5 minutos
+                    mensaje_5m = (
+                        f"{saludo} \U0001f44b ¿Sigues por ahí?\n"
+                        f"Acabo de encontrar unas opciones más que podrían interesarte. "
+                        f"¿Te gustaría que te las mande? \U0001f60a"
+                    )
+                    whatsapp_notifier.client.messages.create(
+                        from_=whatsapp_notifier.NUMERO_TWILIO,
+                        body=mensaje_5m,
+                        to=lead["telefono"]
+                    )
+                    nuevo_obs = observaciones + "\n[FW-5M]"
+                    database.supabase.table("clientes").update({
+                        "observaciones_generales": nuevo_obs
+                    }).eq("telefono", lead["telefono"]).execute()
+                    print(f"[QUICK-FU] \u2705 Etapa 0 (5m) enviada a {lead['telefono']}")
+
+                elif ya_envio_5m and last_activity < umbral_etapa1:
+                    # ETAPA 1: 20 minutos
+                    mensaje_20m = (
+                        f"{saludo} Seguimos aqu\u00ed para ayudarte.\n"
+                        f"\u00bfDeseas continuar con el proceso? "
+                        f"Puedo mostrarte m\u00e1s opciones o conectarte con un asesor."
+                    )
+                    whatsapp_notifier.client.messages.create(
+                        from_=whatsapp_notifier.NUMERO_TWILIO,
+                        body=mensaje_20m,
+                        to=lead["telefono"]
+                    )
+                    database.supabase.table("clientes").update({
+                        "followup_sent":    True,
+                        "followup_sent_at": ahora.isoformat()
+                    }).eq("telefono", lead["telefono"]).execute()
+                    print(f"[QUICK-FU] \u2705 Etapa 1 (20m) enviada a {lead['telefono']}")
             except Exception as e:
-                print(f"[QUICK-FU] \u274c Etapa 1 error con {lead['telefono']}: {e}")
+                print(f"[QUICK-FU] \u274c Error Etapas 0/1 con {lead['telefono']}: {e}")
 
         # ── ETAPA 2: Auto-asignar asesor ────────────────────────────────────────
         res2 = database.supabase.table("clientes") \
