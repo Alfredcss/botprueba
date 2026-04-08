@@ -1,7 +1,7 @@
 from supabase import create_client, Client
 import config
 import utils
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import random
 import whatsapp_notifier
 
@@ -25,16 +25,17 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
     try:
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         
-        # Generar hora
-        ahora = datetime.now()
-        hora = ahora.strftime("%H:%M")
+        # Generar hora en zona horaria de México (UTC-6 fijo)
+        MEXICO_TZ = timezone(timedelta(hours=-6))
+        ahora_mx = datetime.now(MEXICO_TZ)
+        sello = ahora_mx.strftime("%d/%m %H:%M")
 
         observaciones_actuales = observaciones_actuales or ""
         prefijo = "\n" if observaciones_actuales else ""
 
         nuevo_historial = (
-            f"{observaciones_actuales}{prefijo}[{hora}] Cliente: {mensaje_usuario}"
-            f"\n[{hora}] Bot: {respuesta_bot}"
+            f"{observaciones_actuales}{prefijo}[{sello}] Cliente: {mensaje_usuario}"
+            f"\n[{sello}] Bot: {respuesta_bot}"
         )
 
         ahora = datetime.now(timezone.utc)
