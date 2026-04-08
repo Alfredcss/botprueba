@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino="alfredoferrusca885@gmail.com", nombre_asesor="Equipo Century 21"):
+def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino="asesores@c21diamante.com", nombre_asesor="Equipo Century 21"):
     # CONFIGURACIÓN
     GMAIL_USER = os.getenv("GMAIL_USER")
     GMAIL_PASS = os.getenv("GMAIL_PASS")

@@ -175,7 +175,7 @@ async def check_quick_followup():
                 historial   = lead.get("observaciones_generales") or ""
                 nombre_asesor = asesor["nombre"]
                 tel_asesor    = asesor["telefono"]
-                correo_destino = whatsapp_notifier.CORREO_OFICINA if hasattr(whatsapp_notifier, "CORREO_OFICINA") else "alfredoferrusca885@gmail.com"
+                correo_destino = whatsapp_notifier.CORREO_OFICINA if hasattr(whatsapp_notifier, "CORREO_OFICINA") else "asesores@c21diamante.com"
                 if asesor.get("recibir_correo") and asesor.get("correo"):
                     correo_destino += f", {asesor['correo']}"
 
@@ -420,7 +420,7 @@ async def whatsapp_reply(
     info_lead_retenida = None
     nombre_final_asesor_retenido = "Oficina"
     telefono_final_asesor_retenido = whatsapp_notifier.NUMERO_OFICINA
-    correos_destino_final_retenido = "alfredoferrusca885@gmail.com"
+    correos_destino_final_retenido = "asesores@c21diamante.com"
     
     valor_asesor = str(datos_msg.get("quiere_asesor", "")).lower()
     nombre_lead = datos_finales.get("nombre_cliente")
