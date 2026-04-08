@@ -1,28 +1,25 @@
 import os
-import smtplib
 import re
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+import resend
 
 def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino="asesores@c21diamante.com", nombre_asesor="Equipo Century 21"):
-    # CONFIGURACIÓN
-    GMAIL_USER = os.getenv("GMAIL_USER")
-    GMAIL_PASS = os.getenv("GMAIL_PASS")
-    EMAIL_DESTINO = correo_destino
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    EMAIL_FROM     = os.getenv("EMAIL_FROM", "Aria C21 Diamante <aria@c21diamante.com>")
+
+    if not RESEND_API_KEY:
+        print("[MAILER ERROR] Falta la variable de entorno RESEND_API_KEY.")
+        return
+
+    resend.api_key = RESEND_API_KEY
 
     try:
-        msg = MIMEMultipart()
-        msg['From'] = GMAIL_USER
-        msg['To'] = EMAIL_DESTINO
-        # 🚨 CAMBIO 1: Agregamos el nombre del asesor al ASUNTO del correo
-        msg['Subject'] = f"🔴 NUEVO LEAD para {nombre_asesor}: {datos_cliente.get('nombre', 'Cliente')} 🏠"
+        # Limpiamos el número para el link de WhatsApp
+        telefono_raw    = datos_cliente.get('telefono', '')
+        telefono_limpio = re.sub(r'\D', '', telefono_raw)
 
-        # Limpiamos el número para el link de WhatsApp (quitamos 'whatsapp:' y el '+')
-        telefono_raw = datos_cliente.get('telefono', '')
-        telefono_limpio = re.sub(r'\D', '', telefono_raw) # Deja solo los números
+        # Construir lista de destinatarios (puede ser "a@b.com, c@d.com")
+        destinatarios = [d.strip() for d in correo_destino.split(",") if d.strip()]
 
-        # PLANTILLA HTML CON DISEÑO CENTURY 21
         cuerpo_html = f"""
         <html>
           <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f5f7; padding: 20px; margin: 0;">
@@ -46,7 +43,7 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino
                   </tr>
                   <tr>
                     <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #666;"><strong>👤 Nombre del cliente:</strong></td>
-                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #222; font-weight: bold; text-align: right;">{datos_cliente.get('nombre')}</td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #222; font-weight: bold; text-align: right;">{datos_cliente.get('nombre', 'Cliente Interesado')}</td>
                   </tr>
                   <tr>
                     <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #666;"><strong>📱 Teléfono:</strong></td>
@@ -54,11 +51,11 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino
                   </tr>
                   <tr>
                     <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #666;"><strong>📍 Zona de interés:</strong></td>
-                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #222; font-weight: bold; text-align: right;">{datos_cliente.get('zona')}</td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #222; font-weight: bold; text-align: right;">{datos_cliente.get('zona', 'No especificada')}</td>
                   </tr>
                   <tr>
                     <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #666;"><strong>💰 Presupuesto:</strong></td>
-                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #222; font-weight: bold; text-align: right;">${datos_cliente.get('presupuesto')}</td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #eee; color: #222; font-weight: bold; text-align: right;">${datos_cliente.get('presupuesto', 'No especificado')}</td>
                   </tr>
                 </table>
 
@@ -85,14 +82,17 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino
           </body>
         </html>
         """
-      
-        msg.attach(MIMEText(cuerpo_html, 'html'))
 
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(GMAIL_USER, GMAIL_PASS)
-        server.send_message(msg)
-        server.quit()
-        print("[MAILER] Correo HTML enviado exitosamente.")
+        params = {
+            "from":    EMAIL_FROM,
+            "to":      destinatarios,
+            "subject": f"🔴 NUEVO LEAD para {nombre_asesor}: {datos_cliente.get('nombre', 'Cliente Interesado')} 🏠",
+            "html":    cuerpo_html,
+        }
+
+        response = resend.Emails.send(params)
+        print(f"[MAILER] ✅ Correo enviado via Resend. ID: {response.get('id', 'N/A')}")
+
     except Exception as e:
         print(f"[MAILER ERROR] {e}")
+        raise  # Re-lanzar para que main.py lo capture en su bloque independiente
