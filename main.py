@@ -509,39 +509,50 @@ async def whatsapp_reply(
     if asignacion_lista:
         obs_previas = cliente_db.get('observaciones_generales', '') if cliente_db else ''
         historial_actualizado = f"{obs_previas}\nCliente: {Body}\nBot: {respuesta}"
-        
+
+        # 1. Generar resumen IA
+        resumen_ejecutivo = "Sin resumen disponible."
         try:
             resumen_ia = await (agent.prompt_resumen | agent.llm_analista).ainvoke({
                 "historial": historial_actualizado,
                 "nombre": info_lead_retenida["nombre"],
                 "telefono": From
             })
-            resumen_ejecutivo = resumen_ia.content 
+            resumen_ejecutivo = resumen_ia.content
+        except Exception as e:
+            print(f"[ERROR RESUMEN IA] {e}")
 
-            # ENVIAR ALERTA DOBLE (Asesor + Oficina)
+        # 2. Enviar alerta WhatsApp al asesor (independiente)
+        try:
             whatsapp_notifier.enviar_alerta_asesor(
                 numero_asesor=telefono_final_asesor_retenido,
                 datos_cliente=info_lead_retenida,
                 resumen_ai=resumen_ejecutivo,
                 nombre_asesor=nombre_final_asesor_retenido
             )
-            
-            # ENVIAR ALERTA POR CORREO
+        except Exception as e:
+            print(f"[ERROR WHATSAPP ASESOR] {e}")
+
+        # 3. Enviar correo (independiente — un fallo de Gmail NO bloquea el resto)
+        try:
             mailer.enviar_notificacion_asesor(
                 datos_cliente=info_lead_retenida,
                 historial_completo=historial_actualizado,
                 correo_destino=correos_destino_final_retenido,
                 nombre_asesor=nombre_final_asesor_retenido
             )
+        except Exception as e:
+            print(f"[ERROR CORREO ASESOR] {e}")
 
-            # ACTUALIZAR BASE DE DATOS (Columna seguimiento)
+        # 4. Actualizar Supabase SIEMPRE, sin importar si el correo falló
+        try:
             database.supabase.table("clientes").update({
                 "correo_enviado": True,
-                "seguimiento": nombre_final_asesor_retenido 
+                "seguimiento": nombre_final_asesor_retenido
             }).eq("telefono", From).execute()
-            
+            print(f"[DB] ✅ Seguimiento actualizado → {nombre_final_asesor_retenido}")
         except Exception as e:
-            print(f"[ERROR EN NOTIFICACIONES] {e}")
+            print(f"[ERROR DB SEGUIMIENTO] {e}")
 
     # Respuesta XML Segura
     xml = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{respuesta.replace('&','y')}</Message></Response>"""
