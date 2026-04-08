@@ -426,9 +426,9 @@ async def whatsapp_reply(
     nombre_lead = datos_finales.get("nombre_cliente")
     alerta_ya_enviada = cliente_db.get("correo_enviado", False) if cliente_db else False
 
-    if valor_asesor == "true" and nombre_lead and not alerta_ya_enviada:
+    if valor_asesor == "true" and not alerta_ya_enviada:
         asignacion_lista = True
-        nombre_seguro = nombre_lead if nombre_lead else "Cliente (Sin nombre)"
+        nombre_seguro = nombre_lead if nombre_lead and nombre_lead != "Cliente Interesado" else "Cliente Interesado"
         info_lead_retenida = {
             "nombre": nombre_seguro,
             "telefono": From,
