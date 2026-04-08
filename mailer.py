@@ -1,25 +1,26 @@
 import os
 import re
-import resend
+import json
+import requests
+
+# Email del remitente verificado en Brevo (debe coincidir con el sender verificado en tu cuenta)
+EMAIL_FROM_ADDR = os.getenv("EMAIL_FROM_ADDR", "sendcenturydiamante@gmail.com")
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Aria C21 Diamante")
 
 def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino="asesores@c21diamante.com", nombre_asesor="Equipo Century 21"):
-    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-    EMAIL_FROM     = os.getenv("EMAIL_FROM", "Aria C21 Diamante <onboarding@resend.dev>")
-    EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "sendcenturydiamante@gmail.com")
+    BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
-    if not RESEND_API_KEY:
-        print("[MAILER ERROR] Falta la variable de entorno RESEND_API_KEY.")
+    if not BREVO_API_KEY:
+        print("[MAILER ERROR] Falta la variable de entorno BREVO_API_KEY.")
         return
-
-    resend.api_key = RESEND_API_KEY
 
     try:
         # Limpiamos el número para el link de WhatsApp
         telefono_raw    = datos_cliente.get('telefono', '')
         telefono_limpio = re.sub(r'\D', '', telefono_raw)
 
-        # Construir lista de destinatarios (puede ser "a@b.com, c@d.com")
-        destinatarios = [d.strip() for d in correo_destino.split(",") if d.strip()]
+        # Construir lista de destinatarios (soporta múltiples separados por coma)
+        destinatarios = [{"email": d.strip()} for d in correo_destino.split(",") if d.strip()]
 
         cuerpo_html = f"""
         <html>
@@ -84,16 +85,28 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino
         </html>
         """
 
-        params = {
-            "from":     EMAIL_FROM,
-            "to":       destinatarios,
-            "reply_to": EMAIL_REPLY_TO,
-            "subject":  f"🔴 NUEVO LEAD para {nombre_asesor}: {datos_cliente.get('nombre', 'Cliente Interesado')} 🏠",
-            "html":     cuerpo_html,
+        payload = {
+            "sender":      {"name": EMAIL_FROM_NAME, "email": EMAIL_FROM_ADDR},
+            "to":          destinatarios,
+            "subject":     f"🔴 NUEVO LEAD para {nombre_asesor}: {datos_cliente.get('nombre', 'Cliente Interesado')} 🏠",
+            "htmlContent": cuerpo_html
         }
 
-        response = resend.Emails.send(params)
-        print(f"[MAILER] ✅ Correo enviado via Resend. ID: {response.get('id', 'N/A')}")
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key":      BREVO_API_KEY,
+                "Content-Type": "application/json",
+                "Accept":       "application/json"
+            },
+            data=json.dumps(payload),
+            timeout=10
+        )
+
+        if response.status_code in [200, 201]:
+            print(f"[MAILER] ✅ Correo enviado via Brevo a: {correo_destino}")
+        else:
+            raise Exception(f"Brevo error {response.status_code}: {response.text}")
 
     except Exception as e:
         print(f"[MAILER ERROR] {e}")

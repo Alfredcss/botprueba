@@ -293,6 +293,32 @@ async def whatsapp_reply(
         return Response(content="<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>", media_type="text/xml")
 
     # ==============================================================================
+    # DETECCIÓN DE ASESOR — Si el número pertenece a un asesor, NO correr flujo de ventas
+    # ==============================================================================
+    asesor_remitente = database.obtener_asesor_por_telefono(From)
+    if asesor_remitente:
+        nombre_asesor_rem = asesor_remitente.get("nombre", "Asesor")
+        print(f"[ASESOR] Mensaje recibido de asesor: {nombre_asesor_rem} ({From})")
+
+        # Actualizar last_keepalive en la tabla asesores para saber que está activo
+        try:
+            ahora_utc = datetime.now(timezone.utc).isoformat()
+            database.supabase.table("asesores").update({
+                "last_keepalive": ahora_utc
+            }).eq("id", asesor_remitente["id"]).execute()
+        except Exception as e:
+            print(f"[ASESOR] Error actualizando keepalive: {e}")
+
+        # Respuesta de confirmación al asesor (no es un cliente)
+        msg_asesor = (
+            f"✅ ¡Hola {nombre_asesor_rem}!\n"
+            f"Tu conexión está activa. Los nuevos leads te llegarán directamente aquí. 📲\n\n"
+            f"_Este canal es exclusivo para notificaciones de Century 21 Diamante._"
+        )
+        xml_asesor = f"""<?xml version="1.0" encoding="UTF-8"?><Response><Message>{msg_asesor}</Message></Response>"""
+        return Response(content=xml_asesor.strip(), media_type="text/xml")
+
+    # ==============================================================================
     # MODULO CLIENTES (RAG Y CRM)
     # ==============================================================================
     historial = (cliente_db.get("observaciones_generales") or "")[-4000:] if cliente_db else ""

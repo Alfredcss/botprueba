@@ -214,3 +214,24 @@ def obtener_asesor_por_nombre(nombre: str):
     except Exception as e:
         print(f"[ERROR DB OBTENER ASESOR POR NOMBRE] {e}")
         return None
+
+def obtener_asesor_por_telefono(telefono_raw: str):
+    """
+    Detecta si el número entrante pertenece a un asesor registrado.
+    Normaliza el número quitando 'whatsapp:', '+', y espacios para
+    coincidir con el formato que pueda tener la tabla asesores.
+    """
+    try:
+        # Extraer solo dígitos del número entrante (e.g. "whatsapp:+5214271234567" -> "5214271234567")
+        solo_digitos = ''.join(filter(str.isdigit, telefono_raw))
+
+        res = supabase.table("asesores").select("id, nombre, correo, telefono, recibir_correo, activo").execute()
+        for asesor in (res.data or []):
+            tel_asesor = ''.join(filter(str.isdigit, asesor.get("telefono", "")))
+            # Coincidencia si los últimos 10 dígitos son iguales (ignora prefijos de país)
+            if tel_asesor and tel_asesor[-10:] == solo_digitos[-10:]:
+                return asesor
+        return None
+    except Exception as e:
+        print(f"[ERROR DB OBTENER ASESOR POR TELEFONO] {e}")
+        return None
