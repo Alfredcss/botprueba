@@ -4,7 +4,8 @@ import resend
 
 def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino="asesores@c21diamante.com", nombre_asesor="Equipo Century 21"):
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-    EMAIL_FROM     = os.getenv("EMAIL_FROM", "Aria C21 Diamante <aria@c21diamante.com>")
+    EMAIL_FROM     = os.getenv("EMAIL_FROM", "Aria C21 Diamante <onboarding@resend.dev>")
+    EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "sendcenturydiamante@gmail.com")
 
     if not RESEND_API_KEY:
         print("[MAILER ERROR] Falta la variable de entorno RESEND_API_KEY.")
@@ -84,10 +85,11 @@ def enviar_notificacion_asesor(datos_cliente, historial_completo, correo_destino
         """
 
         params = {
-            "from":    EMAIL_FROM,
-            "to":      destinatarios,
-            "subject": f"🔴 NUEVO LEAD para {nombre_asesor}: {datos_cliente.get('nombre', 'Cliente Interesado')} 🏠",
-            "html":    cuerpo_html,
+            "from":     EMAIL_FROM,
+            "to":       destinatarios,
+            "reply_to": EMAIL_REPLY_TO,
+            "subject":  f"🔴 NUEVO LEAD para {nombre_asesor}: {datos_cliente.get('nombre', 'Cliente Interesado')} 🏠",
+            "html":     cuerpo_html,
         }
 
         response = resend.Emails.send(params)
