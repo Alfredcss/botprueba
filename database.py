@@ -25,27 +25,27 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
     try:
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         
-        # Generar hora en zona horaria de México (UTC-6 fijo)
+        # Hora en zona México (UTC-6 fijo, sin DST desde 2022)
         MEXICO_TZ = timezone(timedelta(hours=-6))
         ahora_mx = datetime.now(MEXICO_TZ)
-        sello = ahora_mx.strftime("%d/%m %H:%M")
+        hora = ahora_mx.strftime("%H:%M")
 
         observaciones_actuales = observaciones_actuales or ""
         prefijo = "\n" if observaciones_actuales else ""
 
         nuevo_historial = (
-            f"{observaciones_actuales}{prefijo}[{sello}] Cliente: {mensaje_usuario}"
-            f"\n[{sello}] Bot: {respuesta_bot}"
+            f"{observaciones_actuales}{prefijo}[{hora}] Cliente: {mensaje_usuario}"
+            f"\n[{hora}] Bot: {respuesta_bot}"
         )
 
         ahora = datetime.now(timezone.utc)
         datos_guardar = {
-            "telefono": telefono, 
+            "telefono": telefono,
             "observaciones_generales": nuevo_historial,
-            "fecha_contacto": ahora.strftime("%Y-%m-%d"),
-            "hora_contacto": ahora.strftime("%H:%M:%S"),
-            "last_activity": ahora.isoformat(),  # Para el sistema de follow-up
-            "followup_sent_at": None              # Cancelar ventana de Etapa 2 si el cliente responde
+            "fecha_contacto": ahora_mx.strftime("%Y-%m-%d"),
+            "hora_contacto": ahora_mx.strftime("%H:%M:%S"),
+            "last_activity": ahora.isoformat(),
+            "followup_sent_at": None
         }
 
         if datos_extraidos.get("nombre_cliente"): datos_guardar["nombre_cliente"] = datos_extraidos["nombre_cliente"]

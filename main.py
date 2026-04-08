@@ -272,21 +272,21 @@ async def whatsapp_reply(
     if not bot_activo:
         print(f"[BOT PAUSADO] Mensaje recibido de {From}. Esperando intervención humana.")
         
-        ahora = datetime.now(timezone.utc)
+        ahora_utc = datetime.now(timezone.utc)
         MEXICO_TZ = timezone(timedelta(hours=-6))
         ahora_mx = datetime.now(MEXICO_TZ)
-        sello = ahora_mx.strftime("%d/%m %H:%M")
+        hora_mx = ahora_mx.strftime("%H:%M")
         historial_actual = cliente_db.get("observaciones_generales") or ""
         prefijo = "\n" if historial_actual else ""
-        nuevo_historial = f"{historial_actual}{prefijo}[{sello}] Cliente: {Body}"
+        nuevo_historial = f"{historial_actual}{prefijo}[{hora_mx}] Cliente: {Body}"
         
         try:
             database.supabase.table("clientes").update({
                 "observaciones_generales": nuevo_historial,
                 "leido": False,
-                "fecha_contacto": ahora.strftime("%Y-%m-%d"),
-                "hora_contacto": ahora.strftime("%H:%M:%S"),
-                "last_activity": ahora.isoformat(),  # Resetear ventana de follow-up
+                "fecha_contacto": ahora_mx.strftime("%Y-%m-%d"),
+                "hora_contacto": ahora_mx.strftime("%H:%M:%S"),
+                "last_activity": ahora_utc.isoformat(),  # Resetear ventana de follow-up
                 "followup_sent": False               # El asesor está activo, no mandar followup
             }).eq("telefono", From).execute()
         except Exception as e:
