@@ -63,7 +63,8 @@ def obtener_conversaciones():
                 lineas = [l for l in historial.split('\n') if l.strip()]
                 ultimo_msg = lineas[-1] if lineas else "Sin mensajes aún"
                 
-                ultimo_msg = re.sub(r"^\[\d{2}:\d{2}\]\s*", "", ultimo_msg)
+                ultimo_msg = re.sub(r"^\[\d{2}/\d{2} \d{2}:\d{2}\]\s*", "", ultimo_msg)  # nuevo formato DD/MM HH:MM
+                ultimo_msg = re.sub(r"^\[\d{2}:\d{2}\]\s*", "", ultimo_msg)  # formato legacy HH:MM
                 ultimo_msg = ultimo_msg.replace("Cliente:", "Cliente:").replace("Bot:", "IA:").replace("Asesor:", "Tú:")
                 if len(ultimo_msg) > 35: ultimo_msg = ultimo_msg[:35] + "..."
 
@@ -129,10 +130,10 @@ def enviar_mensaje_asesor(telefono: str, req: MensajeAsesorRequest):
         cliente_db = database.obtener_cliente(telefono)
         if cliente_db:
             ahora = datetime.now()
-            hora_corta = ahora.strftime("%H:%M")
+            sello = ahora.strftime("%d/%m %H:%M")
             historial_actual = cliente_db.get("observaciones_generales") or ""
             prefijo = "\n" if historial_actual else ""
-            nuevo_historial = f"{historial_actual}{prefijo}[{hora_corta}] Asesor: {req.mensaje}"
+            nuevo_historial = f"{historial_actual}{prefijo}[{sello}] Asesor: {req.mensaje}"
             
             database.supabase.table("clientes").update({
                 "observaciones_generales": nuevo_historial,

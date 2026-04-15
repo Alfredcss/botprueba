@@ -14,6 +14,7 @@ export default function Sidebar({
   onSelectClient,
   onOpenAdvisors,
   onOpenReports,
+  onSignOut,
 }) {
   const [searchText, setSearchText] = useState('')
   const [filterHuman, setFilterHuman] = useState(false)
@@ -83,6 +84,14 @@ export default function Sidebar({
           </button>
           <button className="icon-btn" title="Gestión de Asesores" onClick={onOpenAdvisors}>
             <i className="fa-solid fa-users-cog" />
+          </button>
+          <button
+            id="logout-btn"
+            className="icon-btn"
+            title="Cerrar sesión"
+            onClick={onSignOut}
+          >
+            <i className="fa-solid fa-right-from-bracket" />
           </button>
         </div>
       </div>

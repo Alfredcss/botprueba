@@ -25,17 +25,16 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
     try:
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         
-        # Hora en zona México (UTC-6 fijo, sin DST desde 2022)
-        MEXICO_TZ = timezone(timedelta(hours=-6))
-        ahora_mx = datetime.now(MEXICO_TZ)
-        hora = ahora_mx.strftime("%H:%M")
+        # Generar hora y fecha
+        ahora = datetime.now()
+        sello = ahora.strftime("%d/%m %H:%M")
 
         observaciones_actuales = observaciones_actuales or ""
         prefijo = "\n" if observaciones_actuales else ""
 
         nuevo_historial = (
-            f"{observaciones_actuales}{prefijo}[{hora}] Cliente: {mensaje_usuario}"
-            f"\n[{hora}] Bot: {respuesta_bot}"
+            f"{observaciones_actuales}{prefijo}[{sello}] Cliente: {mensaje_usuario}"
+            f"\n[{sello}] Bot: {respuesta_bot}"
         )
 
         ahora = datetime.now(timezone.utc)

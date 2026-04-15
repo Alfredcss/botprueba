@@ -3,16 +3,19 @@ import { formatearEnlaces } from '../lib/utils'
 
 /**
  * Renders a single chat message bubble.
- * @param {{ role: 'Bot'|'Cliente'|'Asesor', text: string, time: string }} props
+ * @param {{ role: 'Bot'|'Cliente'|'Asesor', text: string, time: string, date: string }} props
  */
-export default function MessageBubble({ role, text, time }) {
+export default function MessageBubble({ role, text, time, date }) {
   const botName = import.meta.env.VITE_BOT_NAME || 'IA'
 
-  const timeHtml = time
-    ? `<span class="msg-time">${time}</span>`
+  // Combine date + time: "14/04 · 21:08" or just "21:08" for legacy messages
+  const timeLabel = [date, time].filter(Boolean).join(' · ')
+  const timeHtml = timeLabel
+    ? `<span class="msg-time">${timeLabel}</span>`
     : ''
 
   const linkedText = formatearEnlaces(text)
+  const fullHtml = `<span class="msg-body">${linkedText}</span>${timeHtml}`
 
   if (role === 'Cliente') {
     return (
@@ -20,7 +23,7 @@ export default function MessageBubble({ role, text, time }) {
         <div className="bubble bubble--client">
           <p
             className="bubble__text"
-            dangerouslySetInnerHTML={{ __html: linkedText + timeHtml }}
+            dangerouslySetInnerHTML={{ __html: fullHtml }}
           />
         </div>
       </div>
@@ -37,7 +40,7 @@ export default function MessageBubble({ role, text, time }) {
           </span>
           <p
             className="bubble__text"
-            dangerouslySetInnerHTML={{ __html: linkedText + timeHtml }}
+            dangerouslySetInnerHTML={{ __html: fullHtml }}
           />
         </div>
       </div>
@@ -54,7 +57,7 @@ export default function MessageBubble({ role, text, time }) {
           </span>
           <p
             className="bubble__text"
-            dangerouslySetInnerHTML={{ __html: linkedText + timeHtml }}
+            dangerouslySetInnerHTML={{ __html: fullHtml }}
           />
         </div>
       </div>

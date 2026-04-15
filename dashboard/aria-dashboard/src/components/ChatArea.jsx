@@ -21,7 +21,20 @@ export default function ChatArea({
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
-  const messages = parseMessages(rawLog)
+  // Fallback date for legacy messages that only have [HH:MM] timestamps
+  const rawFecha = selectedClient?._raw?.fecha_contacto || selectedClient?._raw?.created_at || null
+  let fallbackDate = ''
+  if (rawFecha) {
+    // fecha_contacto is "YYYY-MM-DD", created_at is ISO string
+    const d = new Date(rawFecha)
+    if (!isNaN(d)) {
+      const dd = String(d.getUTCDate()).padStart(2, '0')
+      const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+      fallbackDate = `${dd}/${mm}`
+    }
+  }
+
+  const messages = parseMessages(rawLog, fallbackDate)
 
   // Scroll to bottom whenever messages update
   useEffect(() => {
@@ -62,6 +75,24 @@ export default function ChatArea({
     )
   }
 
+  // Build list with date separators injected between messages of different dates
+  const renderedMessages = []
+  let lastDate = null
+  messages.forEach((msg, i) => {
+    const currentDate = msg.date || null
+    if (currentDate && currentDate !== lastDate) {
+      renderedMessages.push(
+        <div key={`date-${currentDate}-${i}`} className="date-separator">
+          <span className="date-separator__pill">{currentDate}</span>
+        </div>
+      )
+      lastDate = currentDate
+    }
+    renderedMessages.push(
+      <MessageBubble key={i} role={msg.role} text={msg.text} time={msg.time} date={msg.date} />
+    )
+  })
+
   return (
     <div id="panel-chat" className="chat-panel">
       <ChatHeader
@@ -79,9 +110,7 @@ export default function ChatArea({
         ) : messages.length === 0 ? (
           <p className="empty-msg">Aún no hay mensajes.</p>
         ) : (
-          messages.map((msg, i) => (
-            <MessageBubble key={i} role={msg.role} text={msg.text} time={msg.time} />
-          ))
+          renderedMessages
         )}
         <div ref={bottomRef} />
       </div>

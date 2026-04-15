@@ -487,14 +487,27 @@ html, body, #root {
   font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0 6px;
 }
 
 .msg-time {
   font-size: 10px;
   opacity: .6;
-  margin-left: 8px;
-  float: right;
-  margin-top: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
+  line-height: 1.4;
+  align-self: flex-end;
+}
+
+.msg-body {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
 }
 
 /* ── QUICK REPLIES ────────────────────────────────────────────── */
@@ -805,6 +818,37 @@ html, body, #root {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: .5; }
+}
+
+/* ── DATE SEPARATOR ───────────────────────────────────────────── */
+.date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0;
+  position: relative;
+}
+
+.date-separator::before,
+.date-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border), transparent);
+}
+
+.date-separator__pill {
+  background: var(--dark);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 3px 12px;
+  border-radius: 999px;
+  margin: 0 12px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(190,154,90,.25);
 }
 
 /* ─────────────────────────────────────────────────────────────── */

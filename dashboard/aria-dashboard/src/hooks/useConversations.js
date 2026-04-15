@@ -47,7 +47,7 @@ export function useConversations() {
   const fetchConversations = useCallback(async () => {
     const { data, error } = await supabase
       .from('clientes')
-      .select('id, telefono, nombre_cliente, observaciones_generales, bot_encendido, leido, created_at, seguimiento, id_propiedad_opcional')
+      .select('id, telefono, nombre_cliente, observaciones_generales, bot_encendido, leido, created_at, seguimiento, id_propiedad_opcional, fecha_contacto')
       .order('created_at', { ascending: false })
 
     // ── DEBUG ──────────────────────────────────────────────────────────────

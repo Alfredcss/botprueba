@@ -272,13 +272,11 @@ async def whatsapp_reply(
     if not bot_activo:
         print(f"[BOT PAUSADO] Mensaje recibido de {From}. Esperando intervención humana.")
         
-        ahora_utc = datetime.now(timezone.utc)
-        MEXICO_TZ = timezone(timedelta(hours=-6))
-        ahora_mx = datetime.now(MEXICO_TZ)
-        hora_mx = ahora_mx.strftime("%H:%M")
+        ahora = datetime.now()
+        sello = ahora.strftime("%d/%m %H:%M")
         historial_actual = cliente_db.get("observaciones_generales") or ""
         prefijo = "\n" if historial_actual else ""
-        nuevo_historial = f"{historial_actual}{prefijo}[{hora_mx}] Cliente: {Body}"
+        nuevo_historial = f"{historial_actual}{prefijo}[{sello}] Cliente: {Body}"
         
         try:
             database.supabase.table("clientes").update({

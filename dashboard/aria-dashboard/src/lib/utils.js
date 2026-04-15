@@ -29,11 +29,12 @@ export function formatearEnlaces(text) {
 
 /**
  * Parses the raw conversation log string into an array of message objects.
- * The log format is: "[HH:MM] Bot:|Cliente:|Asesor: <text>\n..."
+ * Supports multiple timestamp formats from the Python backend.
  * @param {string} log
- * @returns {{ role: string, text: string, time: string }[]}
+ * @param {string} [fallbackDate] - "DD/MM" used for legacy [HH:MM]-only timestamps
+ * @returns {{ role: string, text: string, time: string, date: string }[]}
  */
-export function parseMessages(log) {
+export function parseMessages(log, fallbackDate = '') {
   if (!log) return []
 
   const lines = log.split(/\r?\n/)
@@ -42,7 +43,8 @@ export function parseMessages(log) {
 
   lines.forEach((line) => {
     if (!line.trim() && !current) return
-    const isNew = line.match(/^(?:\[\d{2}:\d{2}\]\s*)?(Cliente:|Bot:|Asesor:)/)
+    // Match lines that start with an optional timestamp then a role prefix
+    const isNew = line.match(/^(?:\[[\d/: -]+\]\s*)?(Cliente:|Bot:|Asesor:)/)
     if (isNew) {
       if (current) grouped.push(current)
       current = line
@@ -54,25 +56,54 @@ export function parseMessages(log) {
 
   return grouped.map((raw) => {
     let timeStr = ''
-    const timeMatch = raw.match(/^\[(\d{2}:\d{2})\]\s*/)
-    if (timeMatch) {
-      timeStr = timeMatch[1]
-      raw = raw.replace(timeMatch[0], '')
+    let dateStr = ''
+    let rest = raw
+
+    // Format 1: [DD/MM/YYYY HH:MM]  e.g. [15/04/2025 13:30]
+    const fmt1 = rest.match(/^\[(\d{2})\/(\d{2})\/\d{4} (\d{2}:\d{2})\]\s*/)
+    if (fmt1) {
+      dateStr = `${fmt1[1]}/${fmt1[2]}`   // "15/04"
+      timeStr = fmt1[3]                    // "13:30"
+      rest = rest.replace(fmt1[0], '')
+    } else {
+      // Format 2: [DD/MM HH:MM]  e.g. [15/04 13:30]
+      const fmt2 = rest.match(/^\[(\d{2}\/\d{2}) (\d{2}:\d{2})\]\s*/)
+      if (fmt2) {
+        dateStr = fmt2[1]   // "15/04"
+        timeStr = fmt2[2]   // "13:30"
+        rest = rest.replace(fmt2[0], '')
+      } else {
+        // Format 3: [YYYY-MM-DD HH:MM]  e.g. [2025-04-15 13:30]
+        const fmt3 = rest.match(/^\[(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})\]\s*/)
+        if (fmt3) {
+          dateStr = `${fmt3[3]}/${fmt3[2]}`   // "15/04"
+          timeStr = fmt3[4]                    // "13:30"
+          rest = rest.replace(fmt3[0], '')
+        } else {
+          // Format 4 (legacy): [HH:MM] — use fallbackDate if provided
+          const fmt4 = rest.match(/^\[(\d{2}:\d{2})\]\s*/)
+          if (fmt4) {
+            timeStr = fmt4[1]
+            dateStr = fallbackDate   // use contact date as fallback
+            rest = rest.replace(fmt4[0], '')
+          }
+        }
+      }
     }
 
     let role = 'unknown'
-    let text = raw
-    if (raw.startsWith('Cliente:')) {
+    let text = rest
+    if (rest.startsWith('Cliente:')) {
       role = 'Cliente'
-      text = raw.replace('Cliente:', '').trim()
-    } else if (raw.startsWith('Bot:')) {
+      text = rest.replace('Cliente:', '').trim()
+    } else if (rest.startsWith('Bot:')) {
       role = 'Bot'
-      text = raw.replace('Bot:', '').trim()
-    } else if (raw.startsWith('Asesor:')) {
+      text = rest.replace('Bot:', '').trim()
+    } else if (rest.startsWith('Asesor:')) {
       role = 'Asesor'
-      text = raw.replace('Asesor:', '').trim()
+      text = rest.replace('Asesor:', '').trim()
     }
 
-    return { role, text, time: timeStr }
+    return { role, text, time: timeStr, date: dateStr }
   })
 }

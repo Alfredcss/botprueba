@@ -3,9 +3,13 @@ import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
 import AdvisorsModal from './components/modals/AdvisorsModal'
 import ReportsModal from './components/modals/ReportsModal'
+import LoginPage from './components/LoginPage'
 import { useConversations } from './hooks/useConversations'
+import { useAuth } from './hooks/useAuth'
 
 export default function App() {
+  const { session, loading: authLoading, error: authError, signIn, signOut } = useAuth()
+
   const {
     conversations,
     setConversations,
@@ -21,33 +25,39 @@ export default function App() {
   const [showAdvisors, setShowAdvisors] = useState(false)
   const [showReports, setShowReports] = useState(false)
 
+  // ── Auth guard ────────────────────────────────────────────────────
+  // Show a blank screen while Supabase resolves the session
+  if (authLoading) return null
+
+  // If no session → show login
+  if (!session) {
+    return <LoginPage onLogin={signIn} loading={authLoading} error={authError} />
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   // Select a client from the sidebar
-  const handleSelectClient = useCallback(
-    async (client) => {
-      const isBotOn = client.bot_encendido !== false
-      const isUnread = !isBotOn && client.leido === false
+  const handleSelectClient = async (client) => {
+    const isBotOn = client.bot_encendido !== false
+    const isUnread = !isBotOn && client.leido === false
 
-      setSelectedClient(client)
-      setBotActive(isBotOn)
-      setMobileShowChat(true)
+    setSelectedClient(client)
+    setBotActive(isBotOn)
+    setMobileShowChat(true)
 
-      // Mark as read directly via Supabase (hook handles optimistic update)
-      if (isUnread) {
-        await markAsRead(client.telefono)
-      }
-    },
-    [markAsRead]
-  )
+    if (isUnread) {
+      await markAsRead(client.telefono)
+    }
+  }
 
-  // Toggle bot on/off — writes directly to Supabase (source of truth)
+  // Toggle bot on/off
   async function handleToggleBot() {
     if (!selectedClient) return
     const newState = !botActive
-    setBotActive(newState) // Optimistic UI update
+    setBotActive(newState)
 
     const success = await toggleBot(selectedClient.telefono, newState)
     if (!success) {
-      setBotActive(!newState) // Revert if Supabase write failed
+      setBotActive(!newState)
     }
   }
 
@@ -66,6 +76,7 @@ export default function App() {
         onSelectClient={handleSelectClient}
         onOpenAdvisors={() => setShowAdvisors(true)}
         onOpenReports={() => setShowReports(true)}
+        onSignOut={signOut}
       />
 
       <ChatArea
