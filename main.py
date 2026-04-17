@@ -90,12 +90,14 @@ async def check_quick_followup():
         umbral_etapa2  = (ahora - timedelta(minutes=MINUTOS_FOLLOWUP_ETAPA2)).isoformat()
 
         # ── ETAPAS 0 y 1: Mensajes de seguimiento ──────────────────────────────
-        # Consultamos todos los que no han llegado a Etapa 1 completa y no están asignados
+        # Consultamos todos los que no han llegado a Etapa 1 completa, no están asignados
+        # y NO tienen asesor ya asignado (correo_enviado=False) para evitar doble asignación
         res1 = database.supabase.table("clientes") \
             .select("telefono, nombre_cliente, last_activity, observaciones_generales") \
             .eq("bot_encendido", True) \
             .eq("followup_sent", False) \
             .eq("auto_asignado", False) \
+            .eq("correo_enviado", False) \
             .execute()
 
         for lead in (res1.data or []):
@@ -123,7 +125,8 @@ async def check_quick_followup():
                         body=mensaje_5m,
                         to=lead["telefono"]
                     )
-                    nuevo_obs = observaciones + "\n[FW-5M]"
+                    sello_fw = datetime.now().strftime("%d/%m %H:%M")
+                    nuevo_obs = observaciones + f"\n[{sello_fw}] Bot: {mensaje_5m}\n[FW-5M]"
                     database.supabase.table("clientes").update({
                         "observaciones_generales": nuevo_obs
                     }).eq("telefono", lead["telefono"]).execute()
@@ -141,20 +144,25 @@ async def check_quick_followup():
                         body=mensaje_20m,
                         to=lead["telefono"]
                     )
+                    sello_fw = datetime.now().strftime("%d/%m %H:%M")
+                    obs_con_20m = observaciones + f"\n[{sello_fw}] Bot: {mensaje_20m}"
                     database.supabase.table("clientes").update({
                         "followup_sent":    True,
-                        "followup_sent_at": ahora.isoformat()
+                        "followup_sent_at": ahora.isoformat(),
+                        "observaciones_generales": obs_con_20m
                     }).eq("telefono", lead["telefono"]).execute()
                     print(f"[QUICK-FU] \u2705 Etapa 1 (20m) enviada a {lead['telefono']}")
             except Exception as e:
                 print(f"[QUICK-FU] \u274c Error Etapas 0/1 con {lead['telefono']}: {e}")
 
         # ── ETAPA 2: Auto-asignar asesor ────────────────────────────────────────
+        # Excluir clientes con correo_enviado=True: ya tienen asesor asignado (Flujo 1 o previo)
         res2 = database.supabase.table("clientes") \
             .select("telefono, nombre_cliente, zona_municipio, presupuesto, observaciones_generales") \
             .eq("bot_encendido", True) \
             .eq("followup_sent", True) \
             .eq("auto_asignado", False) \
+            .eq("correo_enviado", False) \
             .lt("followup_sent_at", umbral_etapa2) \
             .execute()
 
