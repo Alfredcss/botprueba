@@ -38,6 +38,8 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
         )
 
         ahora = datetime.now(timezone.utc)
+        tz_mx = timezone(timedelta(hours=-6))
+        ahora_mx = ahora.astimezone(tz_mx)
         datos_guardar = {
             "telefono": telefono,
             "observaciones_generales": nuevo_historial,
