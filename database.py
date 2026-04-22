@@ -25,9 +25,11 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
     try:
         observaciones_actuales = cliente_existente.get("observaciones_generales", "") if cliente_existente else ""
         
-        # Generar hora y fecha
-        ahora = datetime.now()
-        sello = ahora.strftime("%d/%m %H:%M")
+        # Generar hora y fecha en zona México (UTC-6)
+        tz_mx = timezone(timedelta(hours=-6))
+        ahora_utc = datetime.now(timezone.utc)
+        ahora_mx = ahora_utc.astimezone(tz_mx)
+        sello = ahora_mx.strftime("%d/%m %H:%M")
 
         observaciones_actuales = observaciones_actuales or ""
         prefijo = "\n" if observaciones_actuales else ""
@@ -62,10 +64,10 @@ async def guardar_cliente(mensaje_usuario, respuesta_bot, telefono, datos_extrai
 
         if asesor_asignado_nombre: datos_guardar["seguimiento"] = asesor_asignado_nombre
 
-        if cliente_existente:
-            supabase.table("clientes").update(datos_guardar).eq("telefono", telefono).execute()
-        else:
-            supabase.table("clientes").insert(datos_guardar).execute()
+        # upsert is atomic: INSERT if telefono doesn't exist, UPDATE if it does.
+        # This eliminates the race condition where two simultaneous webhooks both
+        # called obtener_cliente(), got None, and both did INSERT → duplicate row.
+        supabase.table("clientes").upsert(datos_guardar, on_conflict="telefono").execute()
     except Exception as e:
         print(f"[ERROR DB GUARDAR CLIENTE] {e}")
 

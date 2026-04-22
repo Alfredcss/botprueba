@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import ClientItem from './ClientItem'
 
 const agencyName = import.meta.env.VITE_AGENCY_NAME || 'Monitor Aria'
@@ -21,11 +21,30 @@ export default function Sidebar({
   const [filterUnread, setFilterUnread] = useState(false)
   const [filterWithAdvisor, setFilterWithAdvisor] = useState(false)
 
-  const filtered = conversations.filter((c) => {
-    const nombre = c.display ? String(c.display).toLowerCase() : ''
-    const tel = c.telefono ? String(c.telefono).toLowerCase() : ''
-    const asesor = c.seguimiento ? String(c.seguimiento).toLowerCase() : ''
-    const query = searchText.toLowerCase()
+  // Sort: bot OFF (human) first → bot ON (AI) last.
+  // Only when NOT searching — while searching, keep natural date order so the
+  // matched contact appears at the top instead of being buried at the bottom.
+  const sorted = searchText
+    ? conversations
+    : [...conversations].sort((a, b) => {
+        const aHuman = a.bot_encendido === false ? 0 : 1
+        const bHuman = b.bot_encendido === false ? 0 : 1
+        return aHuman - bHuman
+      })
+
+  const filtered = sorted.filter((c) => {
+    // Normalize helper: removes accents so "jose" matches "José"
+    const norm = (str) =>
+      String(str)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+
+    const nombre = norm(c.display || '')
+    // Strip the "whatsapp:" prefix that Twilio adds before comparing
+    const tel = norm((c.telefono || '').replace('whatsapp:', ''))
+    const asesor = norm(c.seguimiento || '')
+    const query = norm(searchText)
 
     // Search matches name, phone, OR assigned advisor name
     const matchText = !query || nombre.includes(query) || tel.includes(query) || asesor.includes(query)
@@ -40,6 +59,13 @@ export default function Sidebar({
 
     return matchText && matchHuman && matchUnread && matchAdvisor
   })
+
+  // --- Auto-select when search narrows results to exactly 1 ---
+  useEffect(() => {
+    if (searchText && filtered.length === 1) {
+      onSelectClient(filtered[0])
+    }
+  }, [filtered.length, searchText]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Active filters count for badge ---
   const activeFilters = [filterHuman, filterUnread, filterWithAdvisor].filter(Boolean).length

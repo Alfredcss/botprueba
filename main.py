@@ -280,8 +280,10 @@ async def whatsapp_reply(
     if not bot_activo:
         print(f"[BOT PAUSADO] Mensaje recibido de {From}. Esperando intervención humana.")
         
-        ahora = datetime.now()
-        sello = ahora.strftime("%d/%m %H:%M")
+        tz_mx = timezone(timedelta(hours=-6))
+        ahora_utc = datetime.now(timezone.utc)
+        ahora_mx = ahora_utc.astimezone(tz_mx)
+        sello = ahora_mx.strftime("%d/%m %H:%M")
         historial_actual = cliente_db.get("observaciones_generales") or ""
         prefijo = "\n" if historial_actual else ""
         nuevo_historial = f"{historial_actual}{prefijo}[{sello}] Cliente: {Body}"

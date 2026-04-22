@@ -18,11 +18,13 @@ export function useChat(telefono) {
     if (!telefono) return
     setLoading(true)
 
+    // Use .limit(1) instead of .maybeSingle() so the query never throws
+    // PGRST116 even when duplicate rows exist for the same telefono in the DB.
     const { data, error } = await supabase
       .from('clientes')
       .select('observaciones_generales')
       .eq('telefono', telefono)
-      .maybeSingle() // returns null (not an error) if no row found
+      .limit(1)
 
     // ── DEBUG ──────────────────────────────────────────────────────────────
     console.log('[useChat] telefono:', telefono, '| Respuesta Supabase:', data, '| Error:', error)
@@ -34,7 +36,9 @@ export function useChat(telefono) {
       return
     }
 
-    setRawLog(data?.observaciones_generales ?? '')
+    // data is always an array with .limit(); take first row (or null if empty)
+    const row = Array.isArray(data) ? data[0] : null
+    setRawLog(row?.observaciones_generales ?? '')
     setLoading(false)
   }, [telefono])
 
