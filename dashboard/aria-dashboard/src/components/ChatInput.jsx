@@ -23,14 +23,36 @@ export default function ChatInput({ clientPhone, onMessageSent }) {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || ''
-      await fetch(`${API_URL}/api/enviar_mensaje/${encodeURIComponent(clientPhone)}`, {
+      const res = await fetch(`${API_URL}/api/enviar_mensaje/${encodeURIComponent(clientPhone)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mensaje: trimmed }),
       })
-      onMessageSent?.()
+
+      if (!res.ok) {
+        console.error(`[ChatInput] Error del servidor: ${res.status} ${res.statusText}`)
+        // Refetch de todas formas por si el mensaje se guardó parcialmente
+        setTimeout(() => onMessageSent?.(), 1000)
+        return
+      }
+
+      // Parsear JSON de forma segura — el servidor podría devolver cuerpo vacío en error
+      let data = {}
+      try {
+        data = await res.json()
+      } catch {
+        console.warn('[ChatInput] La respuesta del servidor no era JSON válido.')
+      }
+
+      if (data.status === 'error') {
+        console.error('[ChatInput] El backend reportó un error al guardar el mensaje:', data.detalle)
+      }
+      // Refetch primario a 800ms — da tiempo al backend Railway de escribir en Supabase
+      setTimeout(() => onMessageSent?.(), 800)
+      // Refetch secundario a 2.5s — red de seguridad por si la primera llega antes que la escritura
+      setTimeout(() => onMessageSent?.(), 2500)
     } catch (err) {
-      console.error('Error enviando mensaje:', err)
+      console.error('[ChatInput] No se pudo conectar con el servidor. ¿Está el backend corriendo?', err)
     } finally {
       setSending(false)
     }

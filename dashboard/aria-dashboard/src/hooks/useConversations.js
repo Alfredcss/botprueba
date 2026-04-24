@@ -13,7 +13,8 @@ function extractLastMessage(observaciones) {
     .filter(Boolean)
   const last = lines[lines.length - 1] || ''
   // Strip the role prefix (e.g. "Bot: texto" → "texto")
-  return last.replace(/^\[\d{2}:\d{2}\]\s*(Bot:|Cliente:|Asesor:)\s*/, '').trim() || 'Sin mensajes'
+  // Strip timestamps: [HH:MM] (legacy) OR [DD/MM HH:MM] (nuevo formato)
+  return last.replace(/^\[(\d{2}\/\d{2} )?\d{2}:\d{2}\]\s*(Bot:|Cliente:|Asesor:)\s*/, '').trim() || 'Sin mensajes'
 }
 
 /**
